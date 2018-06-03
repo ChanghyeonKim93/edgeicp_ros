@@ -22,7 +22,10 @@ set(includeDirs ${includeDirs} include)
 
 set(SRC ${SRC} src/main_script.cpp
 	       src/edgeicp.cpp
+	       src/Liegroup.cpp
+
 	       include/edgeicp.h
+	       include/Liegroup.h
 )
 
 

@@ -76,12 +76,15 @@ public:
     Edgeicp::Hyperparameters hyper;
   };
 
-public: // Methods
+public: // Methods used in main_script.cpp
   Edgeicp(Parameters params_); // constructor
   ~Edgeicp();                  // desctructor.
   void run();                  // one cycle of the algorithm.
   void image_acquisition(const cv::Mat& img, const cv::Mat& depth, const TopicTime& curTime_);
   void getMotion(const double& x, const double& y, const double& z, const double& roll, const double& pitch, const double& yaw);
+
+private: // Methods used in the algorithm privately.
+  //void find_valid_mask(const cv::Mat& edgeMask, const cv::Mat& gradXMap, const cv::Mat& gradYMap, const cv::Mat& validMask, const int& numValidPx);
 
 public: // Public variables
   bool completeFlag;
@@ -93,10 +96,15 @@ private: // Private variables
 
   cv::Mat curImg,  curDepth; // current image data
   cv::Mat keyImg,  keyDepth; // keyframe image data
+  cv::Mat curEdgeMap;
+  cv::Mat keyEdgeMap;
 
   bool isInit;           // boolean indicating whether it is the first iteration or not.
 
   Eigen::MatrixXd tmpXi; // The se(3) from the current keyframe to the current frame.
   Eigen::MatrixXd delXi; // infinitisimal motion update during the optimization.
+
+  std::vector<Eigen::MatrixXd> trajXi; //
+  std::vector<Eigen::MatrixXd> trajSE3;
 };
 #endif
