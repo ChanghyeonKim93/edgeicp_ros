@@ -25,11 +25,13 @@ set(SRC ${SRC}
 	src/edgeicp.cpp
 	src/Liegroup.cpp
 	src/KDTree.cpp
+	src/random_function.cpp
 
 	include/edgeicp.h
 	include/Liegroup.h
 	include/KDTree.h
 	include/MyHeaps.h
+	include/random_function.h
 )
 
 

@@ -17,6 +17,7 @@
 #include <Eigen/Geometry>
 
 #include "KDTree.h"
+#include "random_function.h"
 
 #define PI 3.141592
 
@@ -98,7 +99,6 @@ private:
     }
   } PixelData;
 
-  //PixelData* new_pixeldata(double u_, double v_, double d_, double gx_, double gy_);
   void delete_pixeldata(std::vector<PixelData*>& pixelDataVec);
 
 
@@ -142,6 +142,8 @@ private: // Private variables
 
   cv::Mat curImgGradx, curImgGrady, curImgGrad;
   cv::Mat keyImgGradx, keyImgGrady, keyImgGrad;
+
+  cv::Mat debugImg;
 
 
   // Pixel information containers.
