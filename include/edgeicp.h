@@ -86,6 +86,8 @@ public: // Methods used in main_script.cpp
 private: // Methods used in the algorithm privately.
   //void find_valid_mask(const cv::Mat& edgeMask, const cv::Mat& gradXMap, const cv::Mat& gradYMap, const cv::Mat& validMask, const int& numValidPx);
 
+  void downsample_iamge(const cv::Mat& imgInput, cv::Mat& imgOutput);
+
 public: // Public variables
   bool completeFlag;
 
@@ -94,8 +96,11 @@ private: // Private variables
   TopicTime  curTime;  // current time. (std::string)
   TopicTime  prevTime; // previuos time. (std::string)
 
-  cv::Mat curImg,  curDepth; // current image data
-  cv::Mat keyImg,  keyDepth; // keyframe image data
+  cv::Mat curImg,    curDepth; // current image data , Img : CV_8UC1 (datatype 1), depth : CV_16UC1 (datatype 2)
+  cv::Mat keyImg,    keyDepth; // keyframe image data
+  cv::Mat curImgLow, curDepthLow;
+  cv::Mat keyImgLow, keyDepthLow;
+
   cv::Mat curEdgeMap;
   cv::Mat keyEdgeMap;
 

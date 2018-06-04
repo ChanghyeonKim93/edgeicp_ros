@@ -69,7 +69,7 @@ void image_callback(const sensor_msgs::ImageConstPtr& msgColor , const sensor_ms
 
 	// current gray image ( global variable ).
 	cv::cvtColor(matColorImg, curGrayImg, CV_RGB2GRAY);
-
+	curDepth = matDepth;
 	double curTime_tmp = (double)(msgColor->header.stamp.sec*1e6+msgColor->header.stamp.nsec/1000)/1000000.0;
 	imgTime = dtos(curTime_tmp);
 	imgUpdated = true;
@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
 	typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
 	#endif
 
-	message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(8), colorImgSubs, depthImgSubs );
+	message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(5), colorImgSubs, depthImgSubs );
 	sync.registerCallback(boost::bind(&image_callback, _1, _2));
 
 	// =================== ALGORITHM PART ===================
@@ -116,6 +116,7 @@ int main(int argc, char **argv) {
 	while(ros::ok()) {
 		ros::spinOnce(); // VERY FAST, consumes negligibly small time !!!
 		if(imgUpdated == true) {
+			std::cout<<curDepth.type()<<std::endl;
 			edgeicp->image_acquisition(curGrayImg, curDepth, imgTime);
 			edgeicp->run();
 
