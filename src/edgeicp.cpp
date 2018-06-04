@@ -7,13 +7,27 @@
 Edgeicp::Edgeicp(Parameters params_) : params(params_) {
   if(params.debug.imgShowFlag == true) cv::namedWindow("current image");
   this->completeFlag = false;
-  this->isInit     = true;
+  this->isInit       = true;
+  this->numOfImg     = 0;
+
+  this->keyTree2     = NULL;
+  this->keyTree4     = NULL;
 }
 
 Edgeicp::~Edgeicp() {
   // All dynamic allocations must be deleted !!
   Edgeicp::delete_pixeldata(this->curPixelDataVec);
   Edgeicp::delete_pixeldata(this->keyPixelDataVec);
+
+  // Tree collapse
+  if(this->keyTree2 != NULL){
+    delete this->keyTree2;
+    std::cout<<"Tree2 is deleted !"<<std::endl;
+  }
+  if(this->keyTree4 != NULL){
+    delete this->keyTree4;
+    std::cout<<"Tree4 is deleted !"<<std::endl;
+  }
 
   ROS_INFO_STREAM("Edgeicp node is terminated.\n");
 }
@@ -22,6 +36,7 @@ void Edgeicp::image_acquisition(const cv::Mat& img_, const cv::Mat& depth_, cons
   this->curImg    = img_.clone();
   this->curDepth  = depth_.clone();
   this->curTime   = curTime_;
+  std::cout<<"# of images : "<< ++this->numOfImg <<std::endl;
 }
 
 /*Edgeicp::PixelData* Edgeicp::new_pixeldata(double* u_, double* v_, double* d_, double* gx_, double* gy_){
@@ -222,22 +237,30 @@ void Edgeicp::run() {
     Edgeicp::find_valid_mask(this->keyEdgeMap, this->keyDepthLow, this->keyImgGrad, this->keyEdgeMapValid);
 
     // Extract edge pixels and store in vector.
-    Edgeicp::set_edge_pixels(this->keyEdgeMapValid, this->keyDepthLow, this->keyImgGradx, this->keyImgGrady, this->keyImgGrad, keyPixelDataVec);
+    Edgeicp::set_edge_pixels(this->keyEdgeMapValid, this->keyDepthLow, this->keyImgGradx, this->keyImgGrady, this->keyImgGrad, this->keyPixelDataVec);
 
-    // TODO : At this location, kd tree construction.
-
-
+    // At this location, kd tree construction.
+    double invWidth = 1.0 / (double)this->params.calib.width;
+    std::vector<std::vector<double>> tmpPixel2Vec;
+    tmpPixel2Vec.reserve(0);
+    for(int i = 0; i < this->keyPixelDataVec.size(); i++) {
+    	std::vector<double> tmpPixel2;
+    	tmpPixel2.push_back(this->keyPixelDataVec[i]->u*invWidth);
+      tmpPixel2.push_back(this->keyPixelDataVec[i]->v*invWidth);
+    	tmpPixel2Vec.push_back(tmpPixel2);
+    }
+    keyTree2 = new KDTree( tmpPixel2Vec, (this->params.hyper.treeDistThres*this->params.hyper.treeDistThres)/(this->params.calib.width*this->params.calib.width));
 
     // Initialize the current images
-    this->curEdgeMap  = this->keyEdgeMap;
+    this->curEdgeMap      = this->keyEdgeMap;
     this->curEdgeMapValid = this->keyEdgeMapValid;
 
-    this->curImgLow   = this->keyImgLow;
-    this->curDepthLow = this->keyDepthLow;
+    this->curImgLow       = this->keyImgLow;
+    this->curDepthLow     = this->keyDepthLow;
 
-    this->curImgGradx = this->keyImgGradx;
-    this->curImgGrady = this->keyImgGrady;
-    this->curImgGrad  = this->keyImgGrad;
+    this->curImgGradx     = this->keyImgGradx;
+    this->curImgGrady     = this->keyImgGrady;
+    this->curImgGrad      = this->keyImgGrad;
 
     // First keyframe is updated done.
     this->isInit = false;
@@ -259,16 +282,44 @@ void Edgeicp::run() {
     // Extract edge pixels and store in vector.
     Edgeicp::set_edge_pixels(this->curEdgeMapValid, this->curDepthLow, this->curImgGradx, this->curImgGrady, this->curImgGrad, curPixelDataVec);
 
+    // Store the pixel coordinates in vector.
+    double invWidth = 1.0 / (double)this->params.calib.width;
+    std::vector<std::vector<double>> tmpPixel2Vec;
+    tmpPixel2Vec.reserve(0);
+    for(int i = 0; i < this->curPixelDataVec.size(); i++) {
+      std::vector<double> tmpPixel2;
+      tmpPixel2.push_back(this->curPixelDataVec[i]->u*invWidth);
+      tmpPixel2.push_back(this->curPixelDataVec[i]->v*invWidth);
+      tmpPixel2Vec.push_back(tmpPixel2);
+    }
 
+    // ========================== //
+    //  Iterative optimization !  //
+    // ========================== //
+    int    icpIter  = 0;
+    double errLast  = 1000000, errPrev;
+    double lambda   = 0.05;
+    double stepSize = 0.7;
+    while(icpIter < this->params.hyper.maxIter){
+      std::vector<int> refIdx;
 
-    // Iterative optimization !
+      if(icpIter < this->params.hyper.shiftIter) { // 4-D kdtree approximated NN search
+        keyTree2->kdtree_nearest_neighbor(tmpPixel2Vec, refIdx);
+      }
+      else { // 2-D kdtree search exact NN search
 
-    while(icpIter < this->maxIter){
+      }
 
+      if(icpIter > 5){ // t-distribution weighting after 5 iterations
 
+      }
 
+      if(0){ // iteration stop
 
-
+        break;
+      }
+      icpIter++;
+      //std::cout<<"      optimization iterations : "<<icpIter<<std::endl;
     }
 
     if(0){ // if the distance from the current keyframe to the current frame exceeds the threshold, renew the key frame

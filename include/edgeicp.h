@@ -16,6 +16,8 @@
 #include <Eigen/Dense>
 #include <Eigen/Geometry>
 
+#include "KDTree.h"
+
 #define PI 3.141592
 
 typedef std::string TopicTime;
@@ -53,11 +55,11 @@ public:
 
     Hyperparameters () {
       nSample       = 500;  // the number of sampling pixels from the current frame.
-    	maxIter       = 30;   // Maximum iteration number for an image.
+    	maxIter       = 10;   // Maximum iteration number for an image.
       shiftIter     = 7;    // After 7 iterations, shift to the 2d NN searching.heuristic.
     	treeDistThres = 15.0; // pixels, not use
     	transThres    = 0.05; // 2 cm
-    	rotThres      = 3;    // 3 degree
+    	rotThres      = 3.0;  // 3 degree
     }
   };
 
@@ -122,8 +124,11 @@ public: // Public variables
 
 private: // Private variables
   Parameters params;   // For parameters which can be defined by the user.
+
   TopicTime  curTime;  // current time. (std::string)
   TopicTime  prevTime; // previuos time. (std::string)
+
+  int numOfImg;
 
   // Images
   cv::Mat curImg,    curDepth; // current image data , Img : CV_8UC1 (datatype 1, uchar), depth : CV_16UC1 (datatype 2, ushort)
@@ -142,6 +147,12 @@ private: // Private variables
   // Pixel information containers.
   std::vector<PixelData*> curPixelDataVec;
   std::vector<PixelData*> keyPixelDataVec;
+
+
+  // KDTree
+  KDTree* keyTree2;
+  KDTree* keyTree4;
+
 
 
   bool isInit;           // boolean indicating whether it is the first iteration or not.

@@ -108,7 +108,22 @@ int main(int argc, char **argv) {
 
 	// Define algorithm parameters
 	Edgeicp::Parameters params;
-	params.debug.imgShowFlag = dbgFlag;
+	params.debug.imgShowFlag   = dbgFlag;
+
+	params.calib.fx 					 = 620.608832234754;
+	params.calib.fy            = 619.113993685335;
+	params.calib.cx            = 323.902900972212;
+	params.calib.cy            = 212.418428046497;
+	params.calib.depthScale    = 1000.0;
+	params.calib.width         = 640;
+	params.calib.height      	 = 480;
+
+	params.hyper.nSample       = 500;
+	params.hyper.maxIter       = 10;
+	params.hyper.shiftIter     = 7;
+	params.hyper.treeDistThres = 15.0;
+	params.hyper.transThres    = 0.05;
+	params.hyper.rotThres      = 3.0;
 
 	Edgeicp *edgeicp = new Edgeicp(params);
 
@@ -117,7 +132,6 @@ int main(int argc, char **argv) {
 		ros::spinOnce(); // VERY FAST, consumes negligibly small time !!!
 		if(imgUpdated == true && algorithmDone == true ) {
 			algorithmDone = false;
-			std::cout<<curDepth.type()<<std::endl;
 			edgeicp->image_acquisition(curGrayImg, curDepth, imgTime);
 			edgeicp->run();
 

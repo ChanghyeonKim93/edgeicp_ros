@@ -20,12 +20,16 @@ catkin_package(
 set(includeDirs ${includeDirs} ${CMAKE_CURRENT_BINARY_DIR})
 set(includeDirs ${includeDirs} include)
 
-set(SRC ${SRC} src/main_script.cpp
-	       src/edgeicp.cpp
-	       src/Liegroup.cpp
+set(SRC ${SRC} 
+	src/main_script.cpp
+	src/edgeicp.cpp
+	src/Liegroup.cpp
+	src/KDTree.cpp
 
-	       include/edgeicp.h
-	       include/Liegroup.h
+	include/edgeicp.h
+	include/Liegroup.h
+	include/KDTree.h
+	include/MyHeaps.h
 )
 
 
