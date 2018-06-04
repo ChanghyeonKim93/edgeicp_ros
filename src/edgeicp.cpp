@@ -11,6 +11,10 @@ Edgeicp::Edgeicp(Parameters params_) : params(params_) {
 }
 
 Edgeicp::~Edgeicp() {
+  // All dynamic allocations must be deleted !!
+  Edgeicp::delete_pixeldata(this->curPixelDataVec);
+  Edgeicp::delete_pixeldata(this->keyPixelDataVec);
+
   ROS_INFO_STREAM("Edgeicp node is terminated.\n");
 }
 
@@ -18,42 +22,86 @@ void Edgeicp::image_acquisition(const cv::Mat& img_, const cv::Mat& depth_, cons
   this->curImg    = img_.clone();
   this->curDepth  = depth_.clone();
   this->curTime   = curTime_;
-  ROS_INFO_STREAM("In algorithm image is updated.");
 }
 
-/*
-void Edgeicp::find_valid_mask(const cv::Mat& edgeMask, const cv::Mat& gradXMap, const cv::Mat& gradYMap, const cv::Mat& validMask, const int& numValidPx){
-  cv::Mat tmpMat;
-  numValidPx = 0; // initialize
-  tmpMat.create(edgeMask.size(),CV_8U);
+/*Edgeicp::PixelData* Edgeicp::new_pixeldata(double* u_, double* v_, double* d_, double* gx_, double* gy_){
+  Edgeicp::PixelData* pixelData;
+  if( (pixelData = (Edgeicp::PixelData*)malloc(sizeof(Edgeicp::PixelData)) ) == NULL){
+    printf("error allocating new pixeldata ! \n");
+    exit(1);
+  }
+  pixelData->u = u_;
+  pixelData->v = v_;
+  pixelData->d = d_;
+  pixelData->gx = gx_;
+  pixelData->gy = gy_;
 
-  int u=0, v=0;
-  for(v = 0; v < edgeMask.rows; v++){
-    uchar  *edgePtr  = edgeMask.ptr<uchar>(v);
-    double *depthPtr = depth_map.ptr<double>(v);
-    uchar  *tmpPtr   = tmpMat.ptr<uchar>(v);
+  return pixelData;
+}*/
 
-    for(u = 0; u < edgeMask.cols; u++){
-      if(*(edgePtr++) > 0 & *(depthPtr++) > 0){
-        *(tmpPtr++) = 255;
-        numValidPx++;
+void Edgeicp::delete_pixeldata(std::vector<PixelData*>& pixelDataVec) {
+  int len = pixelDataVec.size();
+  if(len > 0){
+    for(std::vector<PixelData*>::iterator it = pixelDataVec.begin(); it != pixelDataVec.end(); it++) {
+      delete (*it);
+    }
+    pixelDataVec.clear();
+  }
+  else printf("No edge pixels to be deleted !\n");
+}
+
+void Edgeicp::find_valid_mask(const cv::Mat& imgInputEdge, const cv::Mat& imgDepth, const cv::Mat& imgGrad, cv::Mat& imgOutputEdge){
+  int numValidPixels = 0; // initialize
+  imgOutputEdge.create(imgInputEdge.size(), CV_8U);
+
+  int u, v;
+  for(v = 0; v < imgInputEdge.rows; v++){
+    const uchar  *imgInputEdgePtr = imgInputEdge.ptr<uchar>(v);
+    const ushort *imgDepthPtr     = imgDepth.ptr<ushort>(v);
+    uchar *imgOutputEdgePtr       = imgOutputEdge.ptr<uchar>(v);
+
+    for(u = 0; u < imgInputEdge.cols; u++){
+      if(*(imgInputEdgePtr++) > 0 & *(imgDepthPtr++) > 0){
+        *(imgOutputEdgePtr++) = 255;
+        numValidPixels++;
       }
       else{
-        *(tmpPtr++) = 0;
+        *(imgOutputEdgePtr++) = 0;
       }
     }
   }
-  tmpMat.copyTo(img_o); // output : valid pixel mask cv::Mat image
 }
-*/
 
-void Edgeicp::getMotion(const double& x, const double& y, const double& z, const double& roll, const double& pitch, const double& yaw){
 
+void Edgeicp::set_edge_pixels(const cv::Mat& imgInputEdge, const cv::Mat& imgDepth, const cv::Mat& imgGradx, const cv::Mat& imgGrady, const cv::Mat& imgGrad, std::vector<Edgeicp::PixelData*>& pixelDataVec){
+  int cnt = 0;
+  int u, v;
+  pixelDataVec.reserve(0); // initialize the pixelDataVec vector.
+
+  for(v = 0; v < imgInputEdge.rows; v++){
+    const uchar* imgInputEdgePtr = imgInputEdge.ptr<uchar>(v);
+    const double* imgGradxPtr    = imgGradx.ptr<double>(v);
+    const double* imgGradyPtr    = imgGrady.ptr<double>(v);
+    const double* imgDepthPtr    = imgDepth.ptr<double>(v);
+
+    for(u = 0; u < imgInputEdge.cols; u++){
+      if(*(imgInputEdgePtr++) == 255){
+        Edgeicp::PixelData* tmpPixelData = new Edgeicp::PixelData( (double)u, (double)v, *(imgDepthPtr + u), *(imgGradxPtr + v), *(imgGradyPtr + u) );
+        pixelDataVec.push_back(tmpPixelData);
+        cnt++;
+      }
+    }
+  }
+
+  std::cout<<"Num of points : "<<cnt<<std::endl;
 }
 
 void Edgeicp::downsample_iamge(const cv::Mat& imgInput, cv::Mat& imgOutput){
-  cv::Mat temp;
   imgOutput.create(cv::Size(imgInput.cols / 2, imgInput.rows / 2), imgInput.type());
+  if(imgInput.type() != 0){
+    std::cout<<"Gray image type is not a CV_8UC1 (uchar) ! "<<std::endl;
+    exit(1);
+  }
   int u2, u21;
   int u,  v;
 
@@ -67,14 +115,91 @@ void Edgeicp::downsample_iamge(const cv::Mat& imgInput, cv::Mat& imgOutput){
       imgOutputRowPtr[u] =  (uchar)( ( imgInputRowPtr1[u2] + imgInputRowPtr1[u21] + imgInputRowPtr2[u2] + imgInputRowPtr2[u21] ) / 4.0 );
     }
   }
-  //imgOutput = temp.clone();
 }
 
 
+void Edgeicp::downsample_depth(const cv::Mat& imgInput, cv::Mat& imgOutput) {
+    imgOutput.create(cv::Size(imgInput.size().width / 2, imgInput.size().height / 2), imgInput.type());
+    if(imgInput.type() != 2){
+      std::cout<<"Depth image type is not a CV_16UC1 (ushort) ! "<<std::endl;
+      exit(1);
+    }
+    int u0 = 0, u1 = 0, v0 = 0, v1 = 0;
+    int v, u ;
+    ushort sum, cnt;
+    for(v = 0; v < imgOutput.rows; ++v) {
+        for(u = 0; u < imgOutput.cols; ++u) {
+            u0 = u * 2;
+            u1 = u0 + 1;
+            v0 = v * 2;
+            v1 = v0 + 1;
+
+            // initialize
+            sum = 0;
+            cnt = 0;
+
+            if((imgInput.at<ushort>(v0, u0) > 0.01f)) {
+                sum += imgInput.at<ushort>(v0, u0);
+                cnt += 1;
+            }
+            if((imgInput.at<ushort>(v0, u1) > 0.01f)) {
+                sum += imgInput.at<ushort>(v0, u1);
+                cnt += 1;
+            }
+            if((imgInput.at<ushort>(v1, u0) > 0.01f)) {
+                sum += imgInput.at<ushort>(v1, u0);
+                cnt += 1;
+            }
+            if((imgInput.at<ushort>(v1, u1) > 0.01f)) {
+                sum += imgInput.at<ushort>(v1, u1);
+                cnt += 1;
+            }
+            if(cnt > 0) imgOutput.at<ushort>(v, u) = ( sum / cnt );
+            else imgOutput.at<ushort>(v, u) = 0;
+        }
+    }
+}
+
+
+void Edgeicp::calc_gradient(const cv::Mat& imgInput, cv::Mat& imgGradx, cv::Mat& imgGrady, cv::Mat& imgGrad, const bool& doGaussian){
+  // calculate gradient along each direction.
+  cv::Sobel(imgInput, imgGradx, CV_16S, 1,0,3,1,0,cv::BORDER_DEFAULT); // CV_16S : short -32768~32768, CV_64F : double
+  cv::Sobel(imgInput, imgGrady, CV_16S, 0,1,3,1,0,cv::BORDER_DEFAULT);
+
+  if(doGaussian == true){ // apply Gaussian filtering or not
+    cv::GaussianBlur(imgGradx, imgGradx, cv::Size(3,3),0,0);
+    cv::GaussianBlur(imgGrady, imgGrady, cv::Size(3,3),0,0);
+  }
+
+  // calculate gradient norm
+  imgGrad.create(imgInput.size(), CV_64F);
+  int u, v;
+  for(v = 0; v < imgInput.rows; v++){
+    short* imgGradxPtr = imgGradx.ptr<short>(v);
+    short* imgGradyPtr = imgGrady.ptr<short>(v);
+    double* imgGradPtr = imgGrad.ptr<double>(v);
+    for(u = 0; u < imgInput.cols; u++){
+      *(imgGradPtr+u) = sqrt( (double)( ( *(imgGradxPtr + u) ) * ( *(imgGradxPtr + u) ) + ( *(imgGradyPtr + u) ) * ( *(imgGradyPtr + u) ) ) );
+    }
+  }
+}
+
+void Edgeicp::getMotion(const double& x, const double& y, const double& z, const double& roll, const double& pitch, const double& yaw){
+}
+
+
+
+
+
+
+/* ======================================================================
+ * ============================ RUN FUNCTION ============================
+ * ============================ =========================================
+ */
 void Edgeicp::run() {
   this->completeFlag = true; //
 
-  if(this->isInit == true){ // keyframe initialization
+  if(this->isInit == true) { // keyframe initialization
     ROS_INFO_STREAM("FIRST ITERATION - keyframe initialize");
     this->tmpXi  = Eigen::MatrixXd::Zero(6,1);
     this->delXi  = Eigen::MatrixXd::Zero(6,1);
@@ -83,47 +208,99 @@ void Edgeicp::run() {
     this->keyImg   = this->curImg;
     this->keyDepth = this->curDepth;
 
-    // Calculate the gradient values along each direction.
-    //cv::Sobel(this->keyImg, dx_short, CV_16S, 1,0,3,1,0, cv::BORDER_DEFAULT); // CV_16S : short -32768~32768, CV_64F : double
-    //cv::Sobel(this->keyImg, dy_short, CV_16S, 0,1,3,1,0, cv::BORDER_DEFAULT);
+    // Canny edge algorithm to detect the edge pixels.
+    Edgeicp::downsample_iamge(this->keyImg,   this->keyImgLow);
+    Edgeicp::downsample_depth(this->keyDepth, this->keyDepthLow);
+
+    // Find gradient
+    Edgeicp::calc_gradient(this->keyImgLow, this->keyImgGradx, this->keyImgGrady, this->keyImgGrad, false);
 
     // Canny edge algorithm to detect the edge pixels.
-    Edgeicp::downsample_iamge(this->keyImg, this->keyImgLow);
-    std::cout<<this->keyImgLow.cols<<","<<this->keyImgLow.rows<<std::endl;
+    cv::Canny(this->keyImgLow, this->keyEdgeMap, 10, 100);
 
-    cv::Canny(this->keyImgLow, this->keyEdgeMap, 170,220);
-    this->curEdgeMap = this->keyEdgeMap;
-    this->curImgLow  = this->keyImgLow;
+    // Find valid edge pixels from depth and gradient test.
+    Edgeicp::find_valid_mask(this->keyEdgeMap, this->keyDepthLow, this->keyImgGrad, this->keyEdgeMapValid);
+
+    // Extract edge pixels and store in vector.
+    Edgeicp::set_edge_pixels(this->keyEdgeMapValid, this->keyDepthLow, this->keyImgGradx, this->keyImgGrady, this->keyImgGrad, keyPixelDataVec);
+
     // TODO : At this location, kd tree construction.
 
 
+
+    // Initialize the current images
+    this->curEdgeMap  = this->keyEdgeMap;
+    this->curEdgeMapValid = this->keyEdgeMapValid;
+
+    this->curImgLow   = this->keyImgLow;
+    this->curDepthLow = this->keyDepthLow;
+
+    this->curImgGradx = this->keyImgGradx;
+    this->curImgGrady = this->keyImgGrady;
+    this->curImgGrad  = this->keyImgGrad;
+
+    // First keyframe is updated done.
     this->isInit = false;
   }
-  else{ // After initial images, successively run the algorithm for the current image.
-
+  else { // After initial images, successively run the algorithm for the current image.
     // Downsample image ( resolution down upto lvl = 2)
     Edgeicp::downsample_iamge(this->curImg, this->curImgLow);
+    Edgeicp::downsample_depth(this->curDepth, this->curDepthLow);
 
-    // Find edge region
-    //cv::Sobel(this->curImg, dx_short, CV_16S, 1,0,3,1,0,cv::BORDER_DEFAULT); // CV_16S : short -32768~32768, CV_64F : double
-    //cv::Sobel(this->curImg, dy_short, CV_16S, 0,1,3,1,0,cv::BORDER_DEFAULT);
-    //cv::GaussianBlur(dx_short,dx_short,cv::Size(3,3),0,0);
-    //cv::GaussianBlur(dy_short,dy_short,cv::Size(3,3),0,0);
-    //RGBDIMAGE::calcDerivNorm(dx_short, dy_short, d_norm, dx, dy);
+    // Find gradient
+    Edgeicp::calc_gradient(this->curImgLow, this->curImgGradx, this->curImgGrady, this->curImgGrad, false);
 
     // Canny edge algorithm to detect the edge pixels.
-    cv::Canny(this->curImgLow, this->curEdgeMap, 170,220);
+    cv::Canny(this->curImgLow, this->curEdgeMap, 120, 200);
 
-    if(0){ // if the distance from the current keyframe to the current frame exceeds the threshold, renew the key frame
-      this->keyImg   = this->curImg;
-      this->keyDepth = this->curDepth;
+    // Find valid edge pixels from depth and gradient test.
+    Edgeicp::find_valid_mask(this->curEdgeMap, this->curDepthLow, this->curImgGrad, this->curEdgeMapValid);
+
+    // Extract edge pixels and store in vector.
+    Edgeicp::set_edge_pixels(this->curEdgeMapValid, this->curDepthLow, this->curImgGradx, this->curImgGrady, this->curImgGrad, curPixelDataVec);
+
+
+
+    // Iterative optimization !
+
+    while(icpIter < this->maxIter){
+
+
+
 
 
     }
+
+    if(0){ // if the distance from the current keyframe to the current frame exceeds the threshold, renew the key frame
+      this->tmpXi       = Eigen::MatrixXd::Zero(6,1);
+      this->delXi       = Eigen::MatrixXd::Zero(6,1);
+
+      this->keyImg      = this->curImg;
+      this->keyDepth    = this->curDepth;
+
+      this->keyImgLow   = this->curImgLow;
+      this->keyDepthLow = this->curDepthLow;
+
+      this->keyEdgeMap  = this->curEdgeMap;
+
+      Edgeicp::delete_pixeldata(this->keyPixelDataVec);
+    }
+
+
+
+
+
+    // free dynamic allocations
+    Edgeicp::delete_pixeldata(this->curPixelDataVec);
   }
 
+
   if(this->params.debug.imgShowFlag == true){
-    cv::imshow("current image", this->curImgLow);
-    cv::waitKey(5);
+    cv::Mat scaledImg;
+    double min, max;
+    cv::minMaxIdx(this->curDepthLow, &min, &max);
+    cv::convertScaleAbs(this->curDepthLow, scaledImg, 255 / max);
+    cv::imshow("current image", this->curEdgeMap);
+    cv::waitKey(3);
   }
 }

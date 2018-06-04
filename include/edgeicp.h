@@ -27,16 +27,18 @@ public:
     double fy;  //  focal length y
     double cx;  //  principal point (u-coordinate)
     double cy;  //  principal point (v-coordinate)
+    double depthScale;
     int width ;
     int height;
 
     Calibration () {
-      fx     = 620.608832234754;
-      fy     = 619.113993685335;
-      cx     = 323.902900972212;
-      cy     = 212.418428046497;
-      width  = 752;
-      height = 480;
+      fx          = 620.608832234754;
+      fy          = 619.113993685335;
+      cx          = 323.902900972212;
+      cy          = 212.418428046497;
+      depthScale  = 1000.0;
+      width       = 640;
+      height      = 480;
     }
   };
 
@@ -76,6 +78,28 @@ public:
     Edgeicp::Hyperparameters hyper;
   };
 
+
+private:
+  typedef struct PixelData_ { // For pixel structure.
+    double u;
+    double v;
+    double d;
+    double gy;
+    double gx;
+
+    PixelData_(double u_, double v_, double d_, double gx_, double gy_) {
+      u  = u_;
+      v  = v_;
+      d  = d_;
+      gx = gx_;
+      gy = gy_;
+    }
+  } PixelData;
+
+  //PixelData* new_pixeldata(double u_, double v_, double d_, double gx_, double gy_);
+  void delete_pixeldata(std::vector<PixelData*>& pixelDataVec);
+
+
 public: // Methods used in main_script.cpp
   Edgeicp(Parameters params_); // constructor
   ~Edgeicp();                  // desctructor.
@@ -83,26 +107,42 @@ public: // Methods used in main_script.cpp
   void image_acquisition(const cv::Mat& img, const cv::Mat& depth, const TopicTime& curTime_);
   void getMotion(const double& x, const double& y, const double& z, const double& roll, const double& pitch, const double& yaw);
 
-private: // Methods used in the algorithm privately.
-  //void find_valid_mask(const cv::Mat& edgeMask, const cv::Mat& gradXMap, const cv::Mat& gradYMap, const cv::Mat& validMask, const int& numValidPx);
 
+private: // Methods used in the algorithm privately.
   void downsample_iamge(const cv::Mat& imgInput, cv::Mat& imgOutput);
+  void downsample_depth(const cv::Mat& imgInput, cv::Mat& imgOutput);
+  void calc_gradient(const cv::Mat& imgInput, cv::Mat& imgGradx, cv::Mat& imgGrady, cv::Mat& imgGrad, const bool& doGaussian);
+  void find_valid_mask(const cv::Mat& imgInputEdge, const cv::Mat& imgDepth, const cv::Mat& imgGrad, cv::Mat& imgOutputEdge);
+  void set_edge_pixels(const cv::Mat& imgInputEdge, const cv::Mat& imgDepth, const cv::Mat& imgGradx, const cv::Mat& imgGrady, const cv::Mat& imgGrad, std::vector<Edgeicp::PixelData*>& pixelDataVec);
+
 
 public: // Public variables
   bool completeFlag;
+
 
 private: // Private variables
   Parameters params;   // For parameters which can be defined by the user.
   TopicTime  curTime;  // current time. (std::string)
   TopicTime  prevTime; // previuos time. (std::string)
 
-  cv::Mat curImg,    curDepth; // current image data , Img : CV_8UC1 (datatype 1), depth : CV_16UC1 (datatype 2)
+  // Images
+  cv::Mat curImg,    curDepth; // current image data , Img : CV_8UC1 (datatype 1, uchar), depth : CV_16UC1 (datatype 2, ushort)
   cv::Mat keyImg,    keyDepth; // keyframe image data
+
   cv::Mat curImgLow, curDepthLow;
   cv::Mat keyImgLow, keyDepthLow;
 
-  cv::Mat curEdgeMap;
-  cv::Mat keyEdgeMap;
+  cv::Mat curEdgeMap, curEdgeMapValid;
+  cv::Mat keyEdgeMap, keyEdgeMapValid;
+
+  cv::Mat curImgGradx, curImgGrady, curImgGrad;
+  cv::Mat keyImgGradx, keyImgGrady, keyImgGrad;
+
+
+  // Pixel information containers.
+  std::vector<PixelData*> curPixelDataVec;
+  std::vector<PixelData*> keyPixelDataVec;
+
 
   bool isInit;           // boolean indicating whether it is the first iteration or not.
 
@@ -111,5 +151,6 @@ private: // Private variables
 
   std::vector<Eigen::MatrixXd> trajXi; //
   std::vector<Eigen::MatrixXd> trajSE3;
+
 };
 #endif

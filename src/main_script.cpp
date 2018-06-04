@@ -28,8 +28,8 @@
 #include <message_filters/sync_policies/approximate_time.h>
 #endif
 
-bool imgUpdated = false;
-bool algUpdated = false;
+bool imgUpdated    = false;
+bool algorithmDone = true;
 
 typedef std::string TopicTime;
 
@@ -115,17 +115,20 @@ int main(int argc, char **argv) {
 	// ROS spinning.
 	while(ros::ok()) {
 		ros::spinOnce(); // VERY FAST, consumes negligibly small time !!!
-		if(imgUpdated == true) {
+		if(imgUpdated == true && algorithmDone == true ) {
+			algorithmDone = false;
 			std::cout<<curDepth.type()<<std::endl;
 			edgeicp->image_acquisition(curGrayImg, curDepth, imgTime);
 			edgeicp->run();
 
-			imgUpdated = false;
-			// ROS_INFO_STREAM("in spin");
+			imgUpdated    = false;
+			algorithmDone = true;
 		}
 	}
 
 	// Cease the code.
+
+	delete edgeicp;
 	ROS_INFO_STREAM("CEASE - edgeicp ");
 	return 0;
 }
