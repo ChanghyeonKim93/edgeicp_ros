@@ -19,7 +19,7 @@ inline double distance_squared( const std::vector<double>& a, const std::vector<
     double d_spatial =0;
     double N = a.size();
    // double lambda = 0.7/4.0;
-   double temp;
+    double temp;
 
     if(N==4){
       temp=(a[2]*b[2] + a[3]*b[3]-1.0);

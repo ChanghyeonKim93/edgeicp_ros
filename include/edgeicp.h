@@ -24,6 +24,7 @@
 typedef std::string TopicTime;
 
 class Edgeicp{
+
 public:
   struct Calibration {
     double fx;  //  focal length x
@@ -64,6 +65,16 @@ public:
     }
   };
 
+  struct Cannyparameters {
+    int lowThres;
+    int highThres;
+
+    Cannyparameters () {
+      lowThres      = 50;
+      highThres     = 110;
+    }
+  };
+
 
   // debug parameters
   struct Debug {
@@ -79,6 +90,7 @@ public:
     Edgeicp::Calibration     calib;
     Edgeicp::Debug           debug;
     Edgeicp::Hyperparameters hyper;
+    Edgeicp::Cannyparameters canny;
   };
 
 
@@ -111,11 +123,12 @@ public: // Methods used in main_script.cpp
 
 
 private: // Methods used in the algorithm privately.
-  void downsample_iamge(const cv::Mat& imgInput, cv::Mat& imgOutput);
+  void downsample_image(const cv::Mat& imgInput, cv::Mat& imgOutput);
   void downsample_depth(const cv::Mat& imgInput, cv::Mat& imgOutput);
   void calc_gradient(const cv::Mat& imgInput, cv::Mat& imgGradx, cv::Mat& imgGrady, cv::Mat& imgGrad, const bool& doGaussian);
   void find_valid_mask(const cv::Mat& imgInputEdge, const cv::Mat& imgDepth, const cv::Mat& imgGrad, cv::Mat& imgOutputEdge);
   void set_edge_pixels(const cv::Mat& imgInputEdge, const cv::Mat& imgDepth, const cv::Mat& imgGradx, const cv::Mat& imgGrady, const cv::Mat& imgGrad, std::vector<Edgeicp::PixelData*>& pixelDataVec);
+  void calc_ICP_residual_div(const std::vector<PixelData*>& curPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, std::vector<double>& residualVec_);
 
 
 public: // Public variables
@@ -131,19 +144,19 @@ private: // Private variables
   int numOfImg;
 
   // Images
-  cv::Mat curImg,    curDepth; // current image data , Img : CV_8UC1 (datatype 1, uchar), depth : CV_16UC1 (datatype 2, ushort)
-  cv::Mat keyImg,    keyDepth; // keyframe image data
+  cv::Mat curImg,      curDepth; // current image data , Img : CV_8UC1 (datatype 1, uchar), depth : CV_16UC1 (datatype 2, ushort)
+  cv::Mat keyImg,      keyDepth; // keyframe image data
 
-  cv::Mat curImgLow, curDepthLow;
-  cv::Mat keyImgLow, keyDepthLow;
+  cv::Mat curImgLow,   curDepthLow;
+  cv::Mat keyImgLow,   keyDepthLow;
 
-  cv::Mat curEdgeMap, curEdgeMapValid;
-  cv::Mat keyEdgeMap, keyEdgeMapValid;
+  cv::Mat curEdgeMap,  curEdgeMapValid;
+  cv::Mat keyEdgeMap,  keyEdgeMapValid;
 
   cv::Mat curImgGradx, curImgGrady, curImgGrad;
   cv::Mat keyImgGradx, keyImgGrady, keyImgGrad;
 
-  cv::Mat debugImg;
+  cv::Mat debugImg, debugEdgeImg;
 
 
   // Pixel information containers.

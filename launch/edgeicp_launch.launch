@@ -1,7 +1,8 @@
 <launch>
     <node pkg="edgeicp" name="edgeicp_node" type="edgeicp_node" output="screen">
-        <param name="color_topic_name" type="string" value="/camera/rgb/image_rect_color"/>
-        <param name="depth_topic_name" type="string" value="/camera/depth_registered/sw_registered/image_rect_raw"/>
+        <param name="color_topic_name" type="string" value="/camera/rgb/image_raw"/>
+	<!--param name="color_topic_name" type="string" value="/camera/rgb/image_color"/-->
+        <param name="depth_topic_name" type="string" value="/camera/depth/image"/>
         <param name="debug_flag" type="bool" value="true"/>
     </node>
 </launch>
