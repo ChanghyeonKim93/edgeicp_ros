@@ -87,15 +87,15 @@ void Edgeicp::set_edge_pixels(const cv::Mat& imgInputEdge, const cv::Mat& imgDep
 
   for(v = 0; v < imgInputEdge.rows; v++){
     const uchar* imgInputEdgePtr = imgInputEdge.ptr<uchar>(v);
-    const double* imgGradxPtr    = imgGradx.ptr<double>(v);
-    const double* imgGradyPtr    = imgGrady.ptr<double>(v);
+    const short* imgGradxPtr    = imgGradx.ptr<short>(v);
+    const short* imgGradyPtr    = imgGrady.ptr<short>(v);
     const double* imgDepthPtr    = imgDepth.ptr<double>(v);
 
     for(u = 0; u < imgInputEdge.cols; u++){
       if(*(imgInputEdgePtr++) == 255){
-        double invGradNorm = 1.0/sqrt( (*(imgGradxPtr + u))*(*(imgGradxPtr + u)) + (*(imgGradyPtr + u))*(*(imgGradyPtr + u)) );
+        double invGradNorm = 1.0/sqrt( (double)((*(imgGradxPtr + u))*(*(imgGradxPtr + u)) + (*(imgGradyPtr + u))*(*(imgGradyPtr + u))) );
 
-        Edgeicp::PixelData* tmpPixelData = new Edgeicp::PixelData( (double)u, (double)v, *(imgDepthPtr + u), (*(imgGradxPtr + u))*invGradNorm, (*(imgGradyPtr + u))*invGradNorm );
+        Edgeicp::PixelData* tmpPixelData = new Edgeicp::PixelData( (double)u, (double)v, (double)*(imgDepthPtr + u), (double)(*(imgGradxPtr + u))*(double)invGradNorm, (double)(*(imgGradyPtr + u))*(double)invGradNorm );
         //std::cout<<tmpPixelData->u<<std::endl;
         pixelDataVec.push_back(tmpPixelData);
         cnt++;
@@ -180,7 +180,7 @@ void Edgeicp::calc_gradient(const cv::Mat& imgInput, cv::Mat& imgGradx, cv::Mat&
     cv::GaussianBlur(imgGradx, imgGradx, cv::Size(3,3),0,0);
     cv::GaussianBlur(imgGrady, imgGrady, cv::Size(3,3),0,0);
   }
-
+  std::cout<<imgGradx.type()<<std::endl;
   // calculate gradient norm
   imgGrad.create(imgInput.size(), CV_64F);
   int u, v;
@@ -224,10 +224,10 @@ void Edgeicp::calc_ICP_residual_div(const std::vector<PixelData*>& curPixelDataV
     resY = diff_y*grad_y;
 
     resTotal = resX + resY;
-
+    std::cout<< grad_x<<","<<grad_y<<std::endl;
     residualVec_.push_back(resTotal);
   }
-  // std::cout<<"residual Vec size: " <<residualVec_.size()<<std::endl;
+   //std::cout<<"residual Vec size: " <<residualVec_.size()<<std::endl;
 }
 
 /* double Edgeicp::update_t_distribution(const std::vector<double>& residualVec_){
@@ -401,6 +401,9 @@ void Edgeicp::run() {
       // TODO: residual
       Edgeicp::calc_ICP_residual_div(this->curPixelDataVec, this->keyPixelDataVec, rndIdx, refIdx, residualVec);
 
+      for(int k=0;k<residualVec.size(); k++){
+      //  std::cout<<residualVec[k]<<std::endl;
+      }
       // TODO: t-distribution update ( update_t_distribution )
       if(icpIter > 5) { // t-distribution weighting after 5 iterations
 
@@ -453,7 +456,13 @@ void Edgeicp::run() {
 
       this->curEdgeMap.copyTo(this->debugEdgeImg);
     }
-    if(this->numOfImg % 10 == 1){ // if the distance from the current keyframe to the current frame exceeds the threshold, renew the key frame
+
+
+
+
+
+    // If the distance from the current keyframe to the current frame exceeds the threshold, renew the key frame
+    if(this->numOfImg % 5 == 1){
       this->tmpXi       = Eigen::MatrixXd::Zero(6,1);
       this->delXi       = Eigen::MatrixXd::Zero(6,1);
 
@@ -496,6 +505,8 @@ void Edgeicp::run() {
         tmpPixel2.push_back(this->keyPixelDataVec[i]->v*invWidth);
       	tmpPixel2Vec.push_back(tmpPixel2);
       }
+
+      // Build new k-d tree.
       this->keyTree2 = new KDTree( tmpPixel2Vec, (this->params.hyper.treeDistThres*this->params.hyper.treeDistThres)/(this->params.calib.width*this->params.calib.width));
     }
 
