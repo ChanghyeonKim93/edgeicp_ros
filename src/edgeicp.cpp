@@ -224,10 +224,9 @@ void Edgeicp::calc_ICP_residual_div(const std::vector<PixelData*>& curPixelDataV
     resY = diff_y*grad_y;
 
     resTotal = resX + resY;
-    std::cout<< grad_x<<","<<grad_y<<std::endl;
+
     residualVec_.push_back(resTotal);
   }
-   //std::cout<<"residual Vec size: " <<residualVec_.size()<<std::endl;
 }
 
 /* double Edgeicp::update_t_distribution(const std::vector<double>& residualVec_){
