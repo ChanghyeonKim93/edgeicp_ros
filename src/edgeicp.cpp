@@ -7,6 +7,7 @@
 Edgeicp::Edgeicp(Parameters params_) : params(params_) {
   if(params.debug.imgShowFlag == true) {
     cv::namedWindow("current image");
+    cv::namedWindow("key image");
     cv::namedWindow("current edge image");
   }
   this->completeFlag = false;
@@ -267,15 +268,22 @@ void Edgeicp::calc_ICP_residual_div(const std::vector<PixelData*>& curPixelDataV
 
 
 
+
+
+
 /* ======================================================================
  * ============================ RUN FUNCTION ============================
  * ============================ =========================================
  */
 void Edgeicp::run() {
-  this->completeFlag = true; //
+  this->completeFlag = true;
 
   if(this->isInit == true) { // keyframe initialization
     ROS_INFO_STREAM("FIRST ITERATION - keyframe initialize");
+
+    // Initialize point containers
+    Edgeicp::delete_pixeldata(this->curPixelDataVec);
+    Edgeicp::delete_pixeldata(this->keyPixelDataVec);
     this->tmpXi  = Eigen::MatrixXd::Zero(6,1);
     this->delXi  = Eigen::MatrixXd::Zero(6,1);
 
@@ -309,23 +317,37 @@ void Edgeicp::run() {
       tmpPixel2.push_back(this->keyPixelDataVec[i]->v*invWidth);
     	tmpPixel2Vec.push_back(tmpPixel2);
     }
-    keyTree2 = new KDTree( tmpPixel2Vec, (this->params.hyper.treeDistThres*this->params.hyper.treeDistThres)/(this->params.calib.width*this->params.calib.width));
+    this->keyTree2 = new KDTree( tmpPixel2Vec, (this->params.hyper.treeDistThres*this->params.hyper.treeDistThres)/(this->params.calib.width*this->params.calib.width));
 
     // Initialize the current images
-    this->curEdgeMap      = this->keyEdgeMap;
-    this->curEdgeMapValid = this->keyEdgeMapValid;
+    this->keyEdgeMap.copyTo(this->curEdgeMap);
+    this->keyEdgeMapValid.copyTo(this->curEdgeMapValid);
 
-    this->curImgLow       = this->keyImgLow;
-    this->curDepthLow     = this->keyDepthLow;
+    this->keyImgLow.copyTo(this->curImgLow);
+    this->keyDepthLow.copyTo(this->curDepthLow);
 
-    this->curImgGradx     = this->keyImgGradx;
-    this->curImgGrady     = this->keyImgGrady;
-    this->curImgGrad      = this->keyImgGrad;
+    this->keyImgGradx.copyTo(this->curImgGradx);
+    this->keyImgGrady.copyTo(this->curImgGrady);
+    this->keyImgGrad.copyTo(this->curImgGrad);
+
+
+    //this->curEdgeMap      = this->keyEdgeMap;
+    //this->curEdgeMapValid = this->keyEdgeMapValid;
+
+    //this->curImgLow       = this->keyImgLow;
+    //this->curDepthLow     = this->keyDepthLow;
+
+    //this->curImgGradx     = this->keyImgGradx;
+    //this->curImgGrady     = this->keyImgGrady;
+    //this->curImgGrad      = this->keyImgGrad;
 
     // First keyframe is updated done.
     this->isInit = false;
   }
   else { // After initial images, successively run the algorithm for the current image.
+    // initialize containers
+    Edgeicp::delete_pixeldata(this->curPixelDataVec);
+
     // Downsample image ( resolution down upto lvl = 2)
     Edgeicp::downsample_image(this->curImg,   this->curImgLow);
     Edgeicp::downsample_depth(this->curDepth, this->curDepthLow);
@@ -340,7 +362,7 @@ void Edgeicp::run() {
     Edgeicp::find_valid_mask(this->curEdgeMap, this->curDepthLow, this->curImgGrad, this->curEdgeMapValid);
 
     // Extract edge pixels and store in vector.
-    Edgeicp::set_edge_pixels(this->curEdgeMapValid, this->curDepthLow, this->curImgGradx, this->curImgGrady, this->curImgGrad, curPixelDataVec);
+    Edgeicp::set_edge_pixels(this->curEdgeMapValid, this->curDepthLow, this->curImgGradx, this->curImgGrady, this->curImgGrad, this->curPixelDataVec);
 
     // Store the pixel coordinates in vector with sampled number of points.
     std::vector<std::vector<double>> tmpPixel2Vec; // For kdtree generation. Temporary vector container.
@@ -362,7 +384,7 @@ void Edgeicp::run() {
     //  Iterative optimization !  //
     // ========================== //
     int    icpIter  = 0;
-    double errLast  = 1000000, errPrev;
+    double errLast  = 1000000.0, errPrev = 0.0;
     double lambda   = 0.05;
     double stepSize = 0.7;
     std::vector<int> refIdx;
@@ -371,13 +393,13 @@ void Edgeicp::run() {
       std::vector<double> residualVec;
 
       if(icpIter < this->params.hyper.shiftIter) { // 4-D kdtree approximated NN search
-        keyTree2->kdtree_nearest_neighbor(tmpPixel2Vec, refIdx);
+        this->keyTree2->kdtree_nearest_neighbor(tmpPixel2Vec, refIdx);
       }
       else { // 2-D kdtree search exact NN search
-        keyTree2->kdtree_nearest_neighbor(tmpPixel2Vec, refIdx);
+        this->keyTree2->kdtree_nearest_neighbor(tmpPixel2Vec, refIdx);
       }
       // TODO: residual
-      Edgeicp::calc_ICP_residual_div(curPixelDataVec, keyPixelDataVec, rndIdx, refIdx, residualVec);
+      Edgeicp::calc_ICP_residual_div(this->curPixelDataVec, this->keyPixelDataVec, rndIdx, refIdx, residualVec);
 
       // TODO: t-distribution update ( update_t_distribution )
       if(icpIter > 5) { // t-distribution weighting after 5 iterations
@@ -405,9 +427,10 @@ void Edgeicp::run() {
     }
 
     if(this->params.debug.imgShowFlag == true){ // showing the debuging image.
-      cv::Scalar colorLine(0,0,255);
+      cv::Scalar colorLine(0,127,255);
       cv::Scalar colorText(120,120,0);
-      cv::Scalar colorCircle(0,0,0);
+      cv::Scalar colorCircleRef(0,0,0);
+      cv::Scalar colorCircleCur(0,0,255);
       double xr, yr, xc, yc;
       for(int i = 0; i < refIdx.size(); i++){
         xr = this->keyPixelDataVec[refIdx[i]]->u;
@@ -415,36 +438,43 @@ void Edgeicp::run() {
         xc = this->curPixelDataVec[rndIdx[i]]->u;
         yc = this->curPixelDataVec[rndIdx[i]]->v;
         cv::line(this->debugImg, cv::Point(xc,yc), cv::Point(xr,yr), colorLine, 2);
-        cv::circle(this->debugImg, cv::Point(xr,yr), 1, colorCircle, CV_FILLED);
+        cv::circle(this->debugImg, cv::Point(xr,yr),  1, colorCircleRef, CV_FILLED);
+        cv::circle(this->debugImg, cv::Point(xc,yc),  1, colorCircleCur, CV_FILLED);
+        //cv::circle(this->curImgLow, cv::Point(xc, yc), 1, colorCircleCur, CV_FILLED);
+
         putText(this->debugImg, "DEBUG IMAGE", cv::Point(180,180), cv::FONT_HERSHEY_SIMPLEX, 0.7, colorText, 2.0);
       }
 
-      this->debugEdgeImg = this->curEdgeMap;
-    }
+      for(int i = 0; i < this->keyPixelDataVec.size(); i++){
+        //xr = this->keyPixelDataVec[i]->u;
+        //yr = this->keyPixelDataVec[i]->v;
+        //cv::circle(this->keyImgLow, cv::Point(xr, yr), 1, colorCircleRef, CV_FILLED);
+      }
 
-    if(this->numOfImg % 30 == 0){ // if the distance from the current keyframe to the current frame exceeds the threshold, renew the key frame
+      this->curEdgeMap.copyTo(this->debugEdgeImg);
+    }
+    if(this->numOfImg % 10 == 1){ // if the distance from the current keyframe to the current frame exceeds the threshold, renew the key frame
       this->tmpXi       = Eigen::MatrixXd::Zero(6,1);
       this->delXi       = Eigen::MatrixXd::Zero(6,1);
 
       // free dynamic allocations
       Edgeicp::delete_pixeldata(this->curPixelDataVec);
       Edgeicp::delete_pixeldata(this->keyPixelDataVec);
-      delete keyTree2;
-      delete keyTree4;
+      delete this->keyTree2;
+      delete this->keyTree4;
 
       // reset the keyImg and keyDepth.
+      this->curEdgeMap.copyTo(this->keyEdgeMap);
+      this->curEdgeMapValid.copyTo(this->keyEdgeMapValid);
 
-      this->keyImg      = this->curImg;
-      this->keyDepth    = this->curDepth;
+      this->curImgLow.copyTo(this->keyImgLow);
+      this->curDepthLow.copyTo(this->keyDepthLow);
 
-      this->keyImgLow   = this->curImgLow;
-      this->keyDepthLow = this->curDepthLow;
+      this->curEdgeMap.copyTo(this->keyEdgeMap);
 
-      this->keyEdgeMap  = this->curEdgeMap;
-
-      this->keyImgGradx = this->curImgGradx;
-      this->keyImgGrady = this->curImgGrady;
-      this->keyImgGrad  = this->curImgGrad;
+      this->curImgGradx.copyTo(this->keyImgGradx);
+      this->curImgGrady.copyTo(this->keyImgGrady);
+      this->curImgGrad.copyTo(this->keyImgGrad);
 
 
       // Canny edge algorithm to detect the edge pixels.
@@ -466,18 +496,22 @@ void Edgeicp::run() {
         tmpPixel2.push_back(this->keyPixelDataVec[i]->v*invWidth);
       	tmpPixel2Vec.push_back(tmpPixel2);
       }
-      keyTree2 = new KDTree( tmpPixel2Vec, (this->params.hyper.treeDistThres*this->params.hyper.treeDistThres)/(this->params.calib.width*this->params.calib.width));
+      this->keyTree2 = new KDTree( tmpPixel2Vec, (this->params.hyper.treeDistThres*this->params.hyper.treeDistThres)/(this->params.calib.width*this->params.calib.width));
     }
+
+
   }
 
 
-  if(this->params.debug.imgShowFlag == true){
+  if(this->params.debug.imgShowFlag == true) {
     cv::Mat scaledImg;
     double min, max;
     cv::minMaxIdx(this->debugEdgeImg, &min, &max);
     cv::convertScaleAbs(this->debugEdgeImg, scaledImg, 255 / max);
 
-    cv::imshow("current image", this->debugImg);
+    cv::imshow("current image", this->curImgLow);
+    cv::imshow("key image", this->keyImgLow);
+    cv::imshow("current edge image", this->debugImg);
     //cv::imshow("current edge image", scaledImg);
     cv::waitKey(3);
     this->debugImg   =  cv::Scalar(255,255,255);

@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
 	typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
 	#endif
 
-	message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(100), colorImgSubs, depthImgSubs );
+	message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), colorImgSubs, depthImgSubs );
 	sync.registerCallback(boost::bind(&image_callback, _1, _2));
 
 	// =======================================================
@@ -87,14 +87,14 @@ int main(int argc, char **argv) {
 	params.calib.height      	 = 480;
 
 	params.hyper.nSample       = 600;  // the number of sub sampling method.
-	params.hyper.maxIter       = 3;   // maximum iteration number of optimization. ( 20 ~ 30 )
+	params.hyper.maxIter       = 2;   // maximum iteration number of optimization. ( 20 ~ 30 )
 	params.hyper.shiftIter     = 7;    // find correspondences by 4 dimensions until shiftIterations. After, we use 2 dimensions matcher.
 	params.hyper.treeDistThres = 15.0; // distance thresholding during kd tree searching.
 	params.hyper.transThres    = 0.05; //
 	params.hyper.rotThres      = 3.0;
 
-	params.canny.lowThres			 = 30;
-	params.canny.highThres		 = 120;
+	params.canny.lowThres			 = 70;
+	params.canny.highThres		 = 200;
 
 
 	Edgeicp *edgeicp = new Edgeicp(params);
@@ -163,5 +163,5 @@ int main(int argc, char **argv) {
  	double curTime_tmp = (double)(msgColor->header.stamp.sec*1e6+msgColor->header.stamp.nsec/1000)/1000000.0;
  	imgTime = dtos(curTime_tmp);
  	imgUpdated = true;
- 	ROS_INFO_STREAM("Image subsc - RGBD images are updated.");
+ 	//ROS_INFO_STREAM("Image subsc - RGBD images are updated.");
  }

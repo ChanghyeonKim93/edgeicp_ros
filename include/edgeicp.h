@@ -131,6 +131,8 @@ private: // Methods used in the algorithm privately.
   void calc_ICP_residual_div(const std::vector<PixelData*>& curPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, std::vector<double>& residualVec_);
 
 
+private: // Scripts
+
 public: // Public variables
   bool completeFlag;
 
