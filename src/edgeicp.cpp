@@ -240,7 +240,7 @@ void Edgeicp::initialize_pixeldata(std::vector<PixelData*>& inputPixelDataVec_, 
 
   // Insert new PixelData* pointers which are filled with .
   for(int k = 0; k < len_; k++) {
-    Edgeicp::PixelData* tmpPixelData = new Edgeicp::PixelData( 0, 0, 0, 0, 0);
+    Edgeicp::PixelData* tmpPixelData = new Edgeicp::PixelData( -1, -1, -1, -1, -1);
     inputPixelDataVec_.push_back(tmpPixelData);
   }
 };
@@ -267,12 +267,32 @@ void Edgeicp::warp_pixel_points(const std::vector<PixelData*> inputPixelDataVec_
     // warp points.
     warpedPointTmp = gTmp * originalPointTmp;
 
+    // project point onto pixel plane and
     // allocate the point information into warpedPixelDataVec
-
+    double invD = 1.0/warpedPointTmp(2);
+    warpedPixelDataVec_[k]->u = this->params.calib.fx*warpedPointTmp(0)*invD + this->params.calib.cx;
+    warpedPixelDataVec_[k]->v = this->params.calib.fy*warpedPointTmp(1)*invD + this->params.calib.cy;
+    warpedPixelDataVec_[k]->d = warpedPointTmp(2);
   }
-
 };
 
+void Edgeicp::convert_pixeldatavec_to_vecvec2d(const std::vector<PixelData*>& pixelDataVec_, const std::vector<int>& indVec_, std::vector<std::vector<double>>& tmpPixel2Vec_){
+
+      if(tmpPixel2Vec_.size() > 0){
+        tmpPixel2Vec_.reserve(0);
+      }
+      tmpPixel2Vec_.reserve(0);
+
+      double invWidth = 1.0 / (double)this->params.calib.width;
+      for(int i = 0; i < indVec_.size(); i++)
+      {
+        std::vector<double> tmpPixel2;
+        tmpPixel2.push_back( pixelDataVec_[indVec_[i]]->u*invWidth);
+        tmpPixel2.push_back( pixelDataVec_[indVec_[i]]->v*invWidth);
+        tmpPixel2Vec_.push_back(tmpPixel2);
+      }
+      std::cout<<"size: "<<tmpPixel2Vec_.size()<<std::endl;
+};
 
 // TODO: !!!
 /*
@@ -426,13 +446,16 @@ void Edgeicp::run() {
     Edgeicp::set_edge_pixels(this->curEdgeMapValid, this->curDepthLow, this->curImgGradx, this->curImgGrady, this->curImgGrad, this->curPixelDataVec);
 
     // Store the pixel coordinates in vector with sampled number of points.
-    std::vector<std::vector<double>> tmpPixel2Vec; // For kdtree generation. Temporary vector container.
-    tmpPixel2Vec.reserve(0);
     std::vector<int> rndIdx;
     rndIdx.reserve(0);
-
     rnd::randsample(this->curPixelDataVec.size(), this->params.hyper.nSample, rndIdx); //sampling without replacement
 
+    // Deprived
+    std::vector<std::vector<double>> tmpPixel2Vec; // For kdtree generation. Temporary vector container.
+    tmpPixel2Vec.reserve(0);
+
+
+    // Deprived
     double invWidth = 1.0 / (double)this->params.calib.width;
     for(int i = 0; i < rndIdx.size(); i++)
     {
@@ -451,16 +474,20 @@ void Edgeicp::run() {
     double stepSize = 0.7;
 
     // initialize the containers which are exploited in the iterative optimization.
+    //Edgeicp::initialize_pixeldata(this->warpedCurPixelDataVec, this->params.hyper.nSample); // warpedCurPixelDataVec ( length : sampled & reduced number ! )
     std::vector<int> refIdx; // reference indices which are matched to the warped current pixels.
-    Edgeicp::initialize_pixeldata(this->warpedCurPixelDataVec, this->params.hyper.nSample); // warpedCurPixelDataVec ( length : sampled & reduced number ! )
 
     while(icpIter < this->params.hyper.maxIter)
     {
+      //std::vector<std::vector<double>> tmpPixel2Vec; // For kdtree NN search. Temporary vector container.
       std::vector<double> residualVec;
       // TODO: warp the current points, ( using "warpedCurPixelDataVec" )
+      //Edgeicp::warp_pixel_points(this->curPixelDataVec, this->tmpXi, this->warpedCurPixelDataVec);
 
+      // TODO: reallocate the warped current points to the
+    //  Edgeicp::convert_pixeldatavec_to_vecvec2d(this->warpedCurPixelDataVec, rndIdx, tmpPixel2Vec);
 
-
+      // TODO: NN search using "warpedCur"
       if(icpIter < this->params.hyper.shiftIter) // 4-D kdtree approximated NN search
       {
         this->keyTree2->kdtree_nearest_neighbor(tmpPixel2Vec, refIdx);
