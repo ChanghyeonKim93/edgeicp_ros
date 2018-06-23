@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
 	params.calib.fy            = 619.113993685335;
 	params.calib.cx            = 323.902900972212;
 	params.calib.cy            = 212.418428046497;
-	params.calib.depthScale    = 1000.0;
+	params.calib.depthScale    = 1.0;
 	params.calib.width         = 640;
 	params.calib.height      	 = 480;
 
@@ -154,12 +154,15 @@ int main(int argc, char **argv) {
  	}
 
  	cv::Mat& matColorImg  = imgColor->image;
- 	//cv::Mat& matDepth     = imgDepth->image;
+ 	cv::Mat& matDepth     = imgDepth->image;
 
  	// current gray image ( global variable ).
  	cv::cvtColor(matColorImg, curGrayImg, CV_RGB2GRAY);
- 	//curDepth = matDepth;
-	curDepth = cv::Mat::ones(480, 640, CV_16UC1)*244;
+	cv::Mat curDepthTmp = cv::Mat::ones(480,640,CV_32FC1);
+ 	curDepthTmp = matDepth.clone();
+	curDepthTmp.convertTo(curDepth, CV_64FC1);
+
+	//curDepth = cv::Mat::ones(480, 640, CV_16UC1)*244;
  	double curTime_tmp = (double)(msgColor->header.stamp.sec*1e6+msgColor->header.stamp.nsec/1000)/1000000.0;
  	imgTime = dtos(curTime_tmp);
  	imgUpdated = true;

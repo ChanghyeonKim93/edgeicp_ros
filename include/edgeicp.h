@@ -132,6 +132,7 @@ public: // Methods used in main_script.cpp
 private: // Methods used in the algorithm privately.
   void downsample_image(const cv::Mat& imgInput, cv::Mat& imgOutput);
   void downsample_depth(const cv::Mat& imgInput, cv::Mat& imgOutput);
+  void validify_depth(cv::Mat& imgInput);
   void calc_gradient(const cv::Mat& imgInput, cv::Mat& imgGradx, cv::Mat& imgGrady, cv::Mat& imgGrad, const bool& doGaussian);
   void find_valid_mask(const cv::Mat& imgInputEdge, const cv::Mat& imgDepth, const cv::Mat& imgGrad, cv::Mat& imgOutputEdge);
   void set_edge_pixels(const cv::Mat& imgInputEdge, const cv::Mat& imgDepth, const cv::Mat& imgGradx, const cv::Mat& imgGrady, const cv::Mat& imgGrad, std::vector<Edgeicp::PixelData*>& pixelDataVec);

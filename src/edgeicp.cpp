@@ -50,6 +50,8 @@ Edgeicp::~Edgeicp() {
 void Edgeicp::image_acquisition(const cv::Mat& img_, const cv::Mat& depth_, const TopicTime& curTime_){
   this->curImg    = img_.clone();
   this->curDepth  = depth_.clone();
+  Edgeicp::validify_depth(this->curDepth);
+
   this->curTime   = curTime_;
   std::cout<<"# of images : "<< (++this->numOfImg) <<std::endl;
 }
@@ -135,14 +137,15 @@ void Edgeicp::downsample_image(const cv::Mat& imgInput, cv::Mat& imgOutput) {
 
 
 void Edgeicp::downsample_depth(const cv::Mat& imgInput, cv::Mat& imgOutput) {
-    imgOutput.create(cv::Size(imgInput.size().width / 2, imgInput.size().height / 2), imgInput.type());
-    if(imgInput.type() != 2){
-      std::cout<<"Depth image type is not a CV_16UC1 (ushort) ! "<<std::endl;
+    if(imgInput.type() != 6)
+    {
+      std::cout<<"Depth image type is not a CV_64FC1 (double) ! "<<std::endl;
       exit(1);
     }
+    imgOutput.create(cv::Size(imgInput.size().width / 2, imgInput.size().height / 2), imgInput.type());
     int u0 = 0, u1 = 0, v0 = 0, v1 = 0;
     int v, u ;
-    ushort sum, cnt;
+    double sum, cnt;
     for(v = 0; v < imgOutput.rows; ++v) {
         for(u = 0; u < imgOutput.cols; ++u) {
             u0 = u * 2;
@@ -153,26 +156,45 @@ void Edgeicp::downsample_depth(const cv::Mat& imgInput, cv::Mat& imgOutput) {
             // initialize
             sum = 0;
             cnt = 0;
-
-            if((imgInput.at<ushort>(v0, u0) > 0.01f)) {
-                sum += imgInput.at<ushort>(v0, u0);
+            if( isnan(imgInput.at<double>(v0, u0)) == 0 && (imgInput.at<double>(v0, u0) > 0.01)) {
+                sum += imgInput.at<double>(v0, u0);
                 cnt += 1;
             }
-            if((imgInput.at<ushort>(v0, u1) > 0.01f)) {
-                sum += imgInput.at<ushort>(v0, u1);
+            if(!isnan(imgInput.at<double>(v0, u1)) == 0 &&(imgInput.at<double>(v0, u1) > 0.01)) {
+                sum += imgInput.at<double>(v0, u1);
                 cnt += 1;
             }
-            if((imgInput.at<ushort>(v1, u0) > 0.01f)) {
-                sum += imgInput.at<ushort>(v1, u0);
+            if(!isnan(imgInput.at<double>(v1, u0)) == 0 &&(imgInput.at<double>(v1, u0) > 0.01)) {
+                sum += imgInput.at<double>(v1, u0);
                 cnt += 1;
             }
-            if((imgInput.at<ushort>(v1, u1) > 0.01f)) {
-                sum += imgInput.at<ushort>(v1, u1);
+            if(!isnan(imgInput.at<double>(v1, u1)) == 0 &&(imgInput.at<double>(v1, u1) > 0.01)) {
+                sum += imgInput.at<double>(v1, u1);
                 cnt += 1;
             }
-            if(cnt > 0) imgOutput.at<ushort>(v, u) = ( sum / cnt );
-            else imgOutput.at<ushort>(v, u) = 0;
+            if(isnan(sum) || isnan(cnt)){
+              std::cout<<"NaN depth ERROR."<<std::endl;
+              exit(1);
+            }
+            if(cnt > 0) imgOutput.at<double>(v, u) = ( sum / cnt );
+            else imgOutput.at<double>(v, u) = 0;
         }
+    }
+}
+
+void Edgeicp::validify_depth(cv::Mat& imgInput) {
+    if(imgInput.type() != 6)
+    {
+      std::cout<<"Depth image type is not a CV_64FC1 (double) ! "<<std::endl;
+      exit(1);
+    }
+    for(int i = 0; i < imgInput.rows; i++)
+    {
+      double* imgInputPtr = imgInput.ptr<double>(i);
+      for(int u =0; u<imgInput.cols; u++)
+      {
+        if(std::isnan(*(imgInputPtr+u))) *(imgInputPtr+u)=0.0;
+      }
     }
 }
 
@@ -245,6 +267,7 @@ void Edgeicp::initialize_pixeldata(std::vector<PixelData*>& inputPixelDataVec_, 
   }
 };
 
+
 void Edgeicp::warp_pixel_points(const std::vector<PixelData*> inputPixelDataVec_, const Eigen::MatrixXd& tmpXi_, std::vector<PixelData*>& warpedPixelDataVec_){
   Eigen::MatrixXd gTmp             = Eigen::MatrixXd::Zero(4,4); // SE(3) (rigid body motion)
   Eigen::MatrixXd originalPointTmp = Eigen::MatrixXd::Zero(4,1); // Homogeneous coordinate.
@@ -259,6 +282,11 @@ void Edgeicp::warp_pixel_points(const std::vector<PixelData*> inputPixelDataVec_
     vTmp = inputPixelDataVec_[k]->v;
     dTmp = inputPixelDataVec_[k]->d;
 
+    if(isnan(inputPixelDataVec_[k]->d)){
+      std::cout<<"NaN error - function[warp_pixel_points]"<<std::endl;
+      exit(1);
+    }
+
     originalPointTmp(0) = this->params.calib.invFx * (uTmp - this->params.calib.cx) * dTmp; // (u-cu)/fu*depth, unit : [meter]
     originalPointTmp(1) = this->params.calib.invFy * (vTmp - this->params.calib.cy) * dTmp; // (v-cv)/fv*depth, unit : [meter]
     originalPointTmp(2) = dTmp; // depth [meter]
@@ -269,10 +297,13 @@ void Edgeicp::warp_pixel_points(const std::vector<PixelData*> inputPixelDataVec_
 
     // project point onto pixel plane and
     // allocate the point information into warpedPixelDataVec
+    /*
     double invD = 1.0/warpedPointTmp(2);
     warpedPixelDataVec_[k]->u = this->params.calib.fx*warpedPointTmp(0)*invD + this->params.calib.cx;
     warpedPixelDataVec_[k]->v = this->params.calib.fy*warpedPointTmp(1)*invD + this->params.calib.cy;
     warpedPixelDataVec_[k]->d = warpedPointTmp(2);
+    */
+
   }
 };
 
@@ -368,17 +399,12 @@ void Edgeicp::run() {
   {
     ROS_INFO_STREAM("FIRST ITERATION - keyframe initialize");
 
-    // Initialize point containers
-    Edgeicp::delete_pixeldata(this->curPixelDataVec);
-    Edgeicp::delete_pixeldata(this->keyPixelDataVec);
-    Edgeicp::delete_pixeldata(this->warpedCurPixelDataVec);
-
     this->tmpXi  = Eigen::MatrixXd::Zero(6,1);
     this->delXi  = Eigen::MatrixXd::Zero(6,1);
 
     // Initialize the keyImg and keyDepth.
-    this->keyImg   = this->curImg;
-    this->keyDepth = this->curDepth;
+    this->curImg.copyTo(this->keyImg);
+    this->curDepth.copyTo(this->keyDepth);
 
     // Canny edge algorithm to detect the edge pixels.
     Edgeicp::downsample_image(this->keyImg,   this->keyImgLow);
@@ -485,7 +511,7 @@ void Edgeicp::run() {
       std::vector<double> residualVec;
 
       // TODO: warp the current points, ( using "warpedCurPixelDataVec" )
-      //Edgeicp::warp_pixel_points(this->curPixelDataVec, this->tmpXi, this->warpedCurPixelDataVec);
+      Edgeicp::warp_pixel_points(this->curPixelDataVec, this->tmpXi, this->warpedCurPixelDataVec);
       // maybe, this->curPixelDataVec to this->warpedCurPixelDataVec is not complete... Due to this, segfault occurs.
       // TODO: reallocate the warped current points to the
       Edgeicp::convert_pixeldatavec_to_vecvec2d(this->curPixelDataVec, rndIdx, tmpPixel2Vec);
