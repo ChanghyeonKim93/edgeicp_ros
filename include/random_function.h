@@ -9,6 +9,7 @@
 
 namespace rnd{
   void randsample(const int& nPoints, const int& nSamples, std::vector<int>& refIdx);
+  double randn(); // not yet done.
 };
 
 #endif

@@ -21,3 +21,8 @@ void rnd::randsample(const int& nPoints, const int& nSample, std::vector<int>& r
     for(i = 0; i < nSample; i++) refIdx[i] = fullIdx[i];
   }
 };
+
+//TODO: randn function.
+double rnd::randn(){
+  return -1;
+};

@@ -18,6 +18,8 @@
 
 #include "KDTree.h"
 #include "random_function.h"
+#include "Liegroup.h"
+#include "random_function.h"
 
 #define PI 3.141592
 
@@ -176,6 +178,7 @@ private: // Private variables
 
   Eigen::MatrixXd tmpXi; // The se(3) from the current keyframe to the current frame.
   Eigen::MatrixXd delXi; // infinitisimal motion update during the optimization.
+  Eigen::MatrixXd tmpTransform;
 
   std::vector<Eigen::MatrixXd> trajXi; //
   std::vector<Eigen::MatrixXd> trajSE3;

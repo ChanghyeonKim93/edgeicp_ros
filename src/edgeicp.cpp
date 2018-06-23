@@ -19,6 +19,13 @@ Edgeicp::Edgeicp(Parameters params_) : params(params_) {
 
   this->debugImg     = cv::Mat(240, 320, CV_8UC3);
 	this->debugImg     = cv::Scalar(255,255,255);
+
+
+  // initialize containers
+  this->tmpXi        = Eigen::MatrixXd::Zero(6,1);
+  this->delXi        = Eigen::MatrixXd::Zero(6,1);
+  this->tmpTransform = Eigen::MatrixXd::Zero(4,4);
+
 }
 
 Edgeicp::~Edgeicp() {
@@ -180,7 +187,6 @@ void Edgeicp::calc_gradient(const cv::Mat& imgInput, cv::Mat& imgGradx, cv::Mat&
     cv::GaussianBlur(imgGradx, imgGradx, cv::Size(3,3),0,0);
     cv::GaussianBlur(imgGrady, imgGrady, cv::Size(3,3),0,0);
   }
-  std::cout<<imgGradx.type()<<std::endl;
   // calculate gradient norm
   imgGrad.create(imgInput.size(), CV_64F);
   int u, v;
@@ -228,7 +234,29 @@ void Edgeicp::calc_ICP_residual_div(const std::vector<PixelData*>& curPixelDataV
     residualVec_.push_back(resTotal);
   }
 }
+// TODO: !!!
+/*
+void Edgeicp::calc_ICP_Jacobian_div(){
+  double fx = this->params.calib.fx;
+  double fy = this->params.calib.fy;
+  double cx = this->params.calib.cx;
+  double cy = this->params.calib.cy;
+  double invZ;
 
+  // X Y Z : warped points.
+  for(int i = 0; i < 1; i++){
+    invZ = 1.0;
+    invZinvZ = invZ*invZ;
+
+    J[0,i] = fx*invZ*gx;
+    J[1,i] = fy*invZ*gy;
+    J[2,i] = -fx*X*invZinvZ*gx - fy*Y*invZinvZ*gy;
+    J[3,i] = -fx*X*Y*invZinvZ*gx - fy*(1+Y*Y*invZinvZ)*gy;
+    J[4,i] = fx*(1+X*X*invZinvZ)*gx + fy*X*Y*invZinvZ*gy;
+    J[5,i] = -fx*Y*invZ*gx + fy*X*invZ*gy;
+  }
+}
+*/
 /* double Edgeicp::update_t_distribution(const std::vector<double>& residualVec_){
   int nSample = 1000;
   int N = residualVec_.size();
@@ -397,12 +425,13 @@ void Edgeicp::run() {
       else { // 2-D kdtree search exact NN search
         this->keyTree2->kdtree_nearest_neighbor(tmpPixel2Vec, refIdx);
       }
-      // TODO: residual
+      // TODO: residual calculation
       Edgeicp::calc_ICP_residual_div(this->curPixelDataVec, this->keyPixelDataVec, rndIdx, refIdx, residualVec);
 
-      for(int k=0;k<residualVec.size(); k++){
-      //  std::cout<<residualVec[k]<<std::endl;
+      for(int k=0; k < residualVec.size(); k++){
+        std::cout<< residualVec[k] <<std::endl;
       }
+
       // TODO: t-distribution update ( update_t_distribution )
       if(icpIter > 5) { // t-distribution weighting after 5 iterations
 
@@ -428,7 +457,8 @@ void Edgeicp::run() {
       //std::cout<<"      optimization iterations : "<<icpIter<<std::endl;
     }
 
-    if(this->params.debug.imgShowFlag == true){ // showing the debuging image.
+    // showing the debuging image.
+    if(this->params.debug.imgShowFlag == true){
       cv::Scalar colorLine(0,127,255);
       cv::Scalar colorText(120,120,0);
       cv::Scalar colorCircleRef(0,0,0);
@@ -458,16 +488,15 @@ void Edgeicp::run() {
 
 
 
-
-
     // If the distance from the current keyframe to the current frame exceeds the threshold, renew the key frame
-    if(this->numOfImg % 5 == 1){
+    if(this->numOfImg % 10 == 1){
       this->tmpXi       = Eigen::MatrixXd::Zero(6,1);
       this->delXi       = Eigen::MatrixXd::Zero(6,1);
 
       // free dynamic allocations
       Edgeicp::delete_pixeldata(this->curPixelDataVec);
       Edgeicp::delete_pixeldata(this->keyPixelDataVec);
+
       delete this->keyTree2;
       delete this->keyTree4;
 
@@ -498,6 +527,7 @@ void Edgeicp::run() {
       double invWidth = 1.0 / (double)this->params.calib.width;
       std::vector<std::vector<double>> tmpPixel2Vec;
       tmpPixel2Vec.reserve(0);
+
       for(int i = 0; i < this->keyPixelDataVec.size(); i++) {
       	std::vector<double> tmpPixel2;
       	tmpPixel2.push_back(this->keyPixelDataVec[i]->u*invWidth);
@@ -505,11 +535,10 @@ void Edgeicp::run() {
       	tmpPixel2Vec.push_back(tmpPixel2);
       }
 
+
       // Build new k-d tree.
       this->keyTree2 = new KDTree( tmpPixel2Vec, (this->params.hyper.treeDistThres*this->params.hyper.treeDistThres)/(this->params.calib.width*this->params.calib.width));
     }
-
-
   }
 
 
