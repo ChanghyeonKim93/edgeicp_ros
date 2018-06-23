@@ -291,7 +291,6 @@ void Edgeicp::convert_pixeldatavec_to_vecvec2d(const std::vector<PixelData*>& pi
         tmpPixel2.push_back( pixelDataVec_[indVec_[i]]->v*invWidth);
         tmpPixel2Vec_.push_back(tmpPixel2);
       }
-      std::cout<<"size: "<<tmpPixel2Vec_.size()<<std::endl;
 };
 
 // TODO: !!!
@@ -451,12 +450,12 @@ void Edgeicp::run() {
     rnd::randsample(this->curPixelDataVec.size(), this->params.hyper.nSample, rndIdx); //sampling without replacement
 
     // Deprived
-    std::vector<std::vector<double>> tmpPixel2Vec; // For kdtree generation. Temporary vector container.
+    /*std::vector<std::vector<double>> tmpPixel2Vec; // For kdtree generation. Temporary vector container.
     tmpPixel2Vec.reserve(0);
-
+    */
 
     // Deprived
-    double invWidth = 1.0 / (double)this->params.calib.width;
+    /*double invWidth = 1.0 / (double)this->params.calib.width;
     for(int i = 0; i < rndIdx.size(); i++)
     {
       std::vector<double> tmpPixel2;
@@ -464,6 +463,7 @@ void Edgeicp::run() {
       tmpPixel2.push_back(this->curPixelDataVec[rndIdx[i]]->v*invWidth);
       tmpPixel2Vec.push_back(tmpPixel2);
     }
+    */
 
     // ====================================================================== //
     // ====================== Iterative optimization ! ====================== //
@@ -479,13 +479,16 @@ void Edgeicp::run() {
 
     while(icpIter < this->params.hyper.maxIter)
     {
-      //std::vector<std::vector<double>> tmpPixel2Vec; // For kdtree NN search. Temporary vector container.
+      // initialize containers.
+      std::vector<std::vector<double>> tmpPixel2Vec; // For kdtree NN search. Temporary vector container.
+      tmpPixel2Vec.reserve(0);
       std::vector<double> residualVec;
+
       // TODO: warp the current points, ( using "warpedCurPixelDataVec" )
       //Edgeicp::warp_pixel_points(this->curPixelDataVec, this->tmpXi, this->warpedCurPixelDataVec);
-
+      // maybe, this->curPixelDataVec to this->warpedCurPixelDataVec is not complete... Due to this, segfault occurs.
       // TODO: reallocate the warped current points to the
-    //  Edgeicp::convert_pixeldatavec_to_vecvec2d(this->warpedCurPixelDataVec, rndIdx, tmpPixel2Vec);
+      Edgeicp::convert_pixeldatavec_to_vecvec2d(this->curPixelDataVec, rndIdx, tmpPixel2Vec);
 
       // TODO: NN search using "warpedCur"
       if(icpIter < this->params.hyper.shiftIter) // 4-D kdtree approximated NN search
