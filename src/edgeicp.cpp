@@ -53,7 +53,8 @@ void Edgeicp::image_acquisition(const cv::Mat& img_, const cv::Mat& depth_, cons
   Edgeicp::validify_depth(this->curDepth);
 
   this->curTime   = curTime_;
-  std::cout<<"# of images : "<< (++this->numOfImg) <<std::endl;
+  ++this->numOfImg;
+  //std::cout<<"# of images : "<< (this->numOfImg) <<std::endl;
 }
 
 void Edgeicp::delete_pixeldata(std::vector<PixelData*>& pixelDataVec) { // storage deletion.
@@ -441,6 +442,20 @@ void Edgeicp::update_weight_matrix(const Eigen::MatrixXd& residual_, const doubl
   for(int i = 0; i < len; i++)
   {
     W_(i,0) = (nu_+1.0) / (nu_ + residual_(i,0)*residual_(i,0)*invSigmaSquared);
+    // std::cout<<W_(i,0)<<std::endl;
+  }
+};
+
+void Edgeicp::multiply_weight_matrix(const Eigen::MatrixXd& J_, const Eigen::MatrixXd& W_, Eigen::MatrixXd& JW_) {
+  int len = J_.rows();
+  int dim = J_.cols();
+
+  for(int i = 0; i < len; i++)
+  {
+    for(int j = 0; j < dim; j++)
+    {
+      JW_(i,j) = J_(i,j)*W_(i,0);
+    }
   }
 };
 
@@ -560,18 +575,19 @@ void Edgeicp::run() {
     double errPrev   = 1e12;
     double lambda    = 0.05;
     double stepScale = 0.7;
-    double tSigma    = 5.0;
+    double tSigma    = 3.0; // initial value. any value is okay.
 
     // initialize the containers exploited in the iterative optimization.
     Edgeicp::initialize_pixeldata(this->warpedCurPixelDataVec, this->curPixelDataVec.size()); // warpedCurPixelDataVec ( length : sampled & reduced number ! )
     std::vector<int> refIdx; // reference indices which are matched to the warped current pixels.
     Eigen::MatrixXd J           = Eigen::MatrixXd::Zero(this->params.hyper.nSample, 6);
-    Eigen::MatrixXd W           = Eigen::MatrixXd::Zero(this->params.hyper.nSample, 1);
+    Eigen::MatrixXd W           = Eigen::MatrixXd::Ones(this->params.hyper.nSample, 1);
     Eigen::MatrixXd JW          = Eigen::MatrixXd::Zero(this->params.hyper.nSample, 6);
     Eigen::MatrixXd H           = Eigen::MatrixXd::Zero(6, 6);
     Eigen::MatrixXd HAugmented  = Eigen::MatrixXd::Zero(6, 6);
     Eigen::MatrixXd diagH       = Eigen::MatrixXd::Zero(6, 6);
     Eigen::MatrixXd residual    = Eigen::MatrixXd::Zero(this->params.hyper.nSample, 1);
+    Eigen::MatrixXd residualW   = Eigen::MatrixXd::Zero(this->params.hyper.nSample, 1);
 
     if(this->params.debug.textShowFlag) std::cout<<"----------------------------------------------------"<<std::endl;
 
@@ -599,13 +615,7 @@ void Edgeicp::run() {
       }
       // TODO: residual calculation
       Edgeicp::calc_icp_residual_div(this->warpedCurPixelDataVec, this->keyPixelDataVec, rndIdx, refIdx, residual);
-      errNow = Edgeicp::mean_residual(residual);
 
-      // TODO: t-distribution weight matrix update ( update_t_distribution )
-      if(icpIter > 5) // t-distribution weighting after 5 iterations
-      {
-
-      }
       /*
        * % Hessian & Jacobian
        * J = calc_ICP_Jacobian_div(ref_pts, warp_pts, g_vec, ref_ind, xi_temp);
@@ -622,13 +632,23 @@ void Edgeicp::run() {
 
       // TODO: calculate Jacobian matrix ( calc_ICP_Jacobian_div )
       Edgeicp::calc_icp_Jacobian_div(warpedCurPixelDataVec, keyPixelDataVec, rndIdx, refIdx, J);
-      // TODO: find t-distribution fitting the current residual. ( update_weight_matrix )
-      tSigma = Edgeicp::update_t_distribution(residual, tSigma, this->params.hyper.tDistNu);
-      // TODO: t-dist weight calculations
-      Edgeicp::update_weight_matrix(residual, tSigma, this->params.hyper.tDistNu, W);
+
+      // TODO: t-distribution weight matrix update ( update_t_distribution )
+      if(icpIter > 5) // t-distribution weighting after 5 iterations
+      {
+        // TODO: find t-distribution fitting the current residual. ( update_weight_matrix )
+        tSigma = Edgeicp::update_t_distribution(residual, tSigma, this->params.hyper.tDistNu);
+        // TODO: t-dist weight calculations
+        Edgeicp::update_weight_matrix(residual, tSigma, this->params.hyper.tDistNu, W);
+      }
+
+      // TODO: t-dist multiply
+      Edgeicp::multiply_weight_matrix(J, W, JW);
+      Edgeicp::multiply_weight_matrix(residual, W, residualW);
+      errNow = Edgeicp::mean_residual(residualW);
 
       // TODO: Hessian calculation
-      H = J.transpose()*J;
+      H = JW.transpose()*J;
       diagH(0,0) = H(0,0);
       diagH(1,1) = H(1,1);
       diagH(2,2) = H(2,2);
@@ -638,73 +658,53 @@ void Edgeicp::run() {
       HAugmented = H + lambda*diagH;
 
       // TODO: delta_xi calculation.
-      delXi = -stepScale * HAugmented.inverse() * J.transpose() * residual;
+      delXi = -stepScale * HAugmented.inverse() * JW.transpose() * residual;
+
       // TODO: xi_temp = xi_temp + delta_xi. update ~
       tmpXi += delXi;
-      // TODO: iteration stop condition
-      if( 0 )
-      {
-        break;
-      }
-      if(this->params.debug.textShowFlag == true)
-      {
-        std::cout<<"--- DEBUG optimization iterations : "<<icpIter<<", Err:"<<errNow<<", wx:"<<tmpXi(0,0)<<", wy:"<<tmpXi(1,0)<<", wz:"<<tmpXi(2,0)<<", vx:"<<tmpXi(3,0)<<", vy:"<<tmpXi(4,0)<<", vz:"<<tmpXi(5,0)<<std::endl;
-      }
-
-      /*
-      if(length(residual_ICP_save)>=2)
-          err_now  = residual_ICP_save(end);
-          err_past = residual_ICP_save(end-1);
-          if(err_now >= err_past || abs(err_now - err_past) / err_past <= 1/100)
-              lambda     = lambda*2;
-              stepScale  = stepScale*1.2;
-              if(stepScale >= 1)
-                  stepScale = 1;
-              end
-              if(lambda >=25)
-                  lambda = 25;
-              end
-          end
-          fprintf('error gap : %f \n', abs(err_now - err_past) );
-          if( abs(err_now - err_past) <= 4*10^-6 || (icp_iter >= 40 && abs(err_now - err_past) <= 1*10^-4) )
-              if( icp_iter >= 20 )
-                  break;
-              end
-          end
-      end
-      */
 
       // TODO: adjust lambda & stepScale
       if(icpIter > 1)
       {
-        if(0)
+        if(errNow >= errPrev || (fabs(errNow - errPrev) / errPrev) <= 1e-2)
         {
           lambda       *= 2.0;
           stepScale    *= 1.2;
 
           if(stepScale >= 1)  stepScale  = 1;
-          if(lambda >= 25)    lambda     = 25;
+          if(lambda >= 20)    lambda     = 20;
+        }
+        if(fabs(errNow - errPrev)<=4*1e-6 || (icpIter >= 40 && fabs(errNow - errPrev)<=1e-4))
+        {
+          if(icpIter >= 20) break;
         }
       }
-
+      if(this->params.debug.textShowFlag == true)
+      {
+        std::cout<<"--- DEBUG optimization iterations:"<<icpIter;
+        printf(", lambda:%0.1lf",lambda);
+        printf(", res(avg):%0.7lf",errNow);
+        printf(", err rate [pcnt]:%0.3lf",(errNow-errPrev)/errPrev*100.0);
+        printf(", wx:%0.5lf, wy:%0.5lf, wz:%0.5lf, vx:%0.5lf, vy:%0.5lf, vz:%0.5lf\n",tmpXi(0,0),tmpXi(1,0),tmpXi(2,0),tmpXi(3,0),tmpXi(4,0),tmpXi(5,0));
+      }
+      errPrev = errNow;
       icpIter++;
     }
-
     std::cout<<std::endl;
 
     Eigen::MatrixXd tmpTransform = Eigen::MatrixXd::Identity(4,4);
     Eigen::MatrixXd globalTransform = Eigen::MatrixXd::Identity(4,4);
 
     lie::se3_exp(tmpXi,tmpTransform);
-    globalTransform = keyTransform*tmpTransform;
+    globalTransform = this->keyTransform*tmpTransform;
 
-    std::cout<<"POSITION x:"<<globalTransform(0,3)<<", y:"<<globalTransform(1,3)<<", z:"<<globalTransform(2,3)<<std::endl;
+    printf("position- x:%0.3lf, y:%0.3lf, z:%0.3lf\n",globalTransform(0,3),globalTransform(1,3),globalTransform(2,3));
 
     // showing the debuging image.
     if(this->params.debug.imgShowFlag == true)
     {
       cv::Scalar colorLine(0,127,255);
-      cv::Scalar colorText(120,120,0);
+      cv::Scalar colorText(80,150,0);
       cv::Scalar colorCircleRef(0,0,0);
       cv::Scalar colorCircleCur(0,0,255);
       double xr, yr, xc, yc;
@@ -719,7 +719,7 @@ void Edgeicp::run() {
         cv::circle(this->debugImg, cv::Point(xc,yc),  1, colorCircleCur, CV_FILLED);
         //cv::circle(this->curImgLow, cv::Point(xc, yc), 1, colorCircleCur, CV_FILLED);
 
-        putText(this->debugImg, "DEBUG IMAGE", cv::Point(180,180), cv::FONT_HERSHEY_SIMPLEX, 0.7, colorText, 2.0);
+        putText(this->debugImg, "DEBUG IMAGE", cv::Point(200,200), cv::FONT_HERSHEY_SIMPLEX, 0.4, colorText, 2.0);
       }
 
       for(int i = 0; i < this->keyPixelDataVec.size(); i++)
@@ -735,8 +735,10 @@ void Edgeicp::run() {
 
 
     // If the distance from the current keyframe to the current frame exceeds the threshold, renew the key frame
-    if(this->numOfImg % 4 == 1)
+    double cur2keyDist = sqrt(tmpTransform(0,3)*tmpTransform(0,3) + tmpTransform(1,3)*tmpTransform(1,3) + tmpTransform(2,3)*tmpTransform(2,3));
+    if( cur2keyDist >= this->params.hyper.transThres)
     {
+      std::cout<<"!!KEYFRAME CHANGE! cur2key distance : "<<cur2keyDist<<std::endl;
       this->tmpXi        = Eigen::MatrixXd::Zero(6,1);
       this->delXi        = Eigen::MatrixXd::Zero(6,1);
       this->keyTransform = globalTransform;
@@ -744,19 +746,21 @@ void Edgeicp::run() {
       // free dynamic allocations
       Edgeicp::delete_pixeldata(this->curPixelDataVec);
       Edgeicp::delete_pixeldata(this->keyPixelDataVec);
+      Edgeicp::delete_pixeldata(this->warpedCurPixelDataVec);
 
+      // delete trees.
       delete this->keyTree2;
       delete this->keyTree4;
 
       // reset the keyImg and keyDepth.
-      this->curEdgeMap.copyTo(this->keyEdgeMap);
-      this->curEdgeMapValid.copyTo(this->keyEdgeMapValid);
+      this->curImg.copyTo(this->keyImg);
+      this->curDepth.copyTo(this->keyDepth);
 
       this->curImgLow.copyTo(this->keyImgLow);
       this->curDepthLow.copyTo(this->keyDepthLow);
 
       this->curEdgeMap.copyTo(this->keyEdgeMap);
-
+      this->curEdgeMapValid.copyTo(this->keyEdgeMapValid);
       this->curImgGradx.copyTo(this->keyImgGradx);
       this->curImgGrady.copyTo(this->keyImgGrady);
       this->curImgGrad.copyTo(this->keyImgGrad);

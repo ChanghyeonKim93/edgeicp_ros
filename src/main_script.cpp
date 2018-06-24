@@ -99,12 +99,13 @@ int main(int argc, char **argv) {
 	params.hyper.nSample       = nSample;  // the number of sub sampling method.
 	params.hyper.maxIter       = maxIter;   // maximum iteration number of optimization. ( 20 ~ 30 )
 	params.hyper.shiftIter     = 7;    // find correspondences by 4 dimensions until shiftIterations. After, we use 2 dimensions matcher.
-	params.hyper.treeDistThres = 15.0; // distance thresholding during kd tree searching.
+	params.hyper.treeDistThres = 5.0; // distance thresholding during kd tree searching.
 	params.hyper.transThres    = 0.05; //
 	params.hyper.rotThres      = 3.0;
+	params.hyper.tDistNu       = 3.0;
 
 	params.canny.lowThres			 = 60;
-	params.canny.highThres		 = 130;
+	params.canny.highThres		 = 140;
 
 
 	Edgeicp *edgeicp = new Edgeicp(params);
@@ -176,5 +177,5 @@ int main(int argc, char **argv) {
  	double curTime_tmp = (double)(msgColor->header.stamp.sec*1e6+msgColor->header.stamp.nsec/1000)/1000000.0;
  	imgTime = dtos(curTime_tmp);
  	imgUpdated = true;
- 	ROS_INFO_STREAM("Image subsc - RGBD images are updated.");
+ 	//ROS_INFO_STREAM("Image subsc - RGBD images are updated.");
  }

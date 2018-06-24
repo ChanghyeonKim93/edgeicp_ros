@@ -153,6 +153,7 @@ private: // Methods used in the algorithm privately.
   double mean_residual(const Eigen::MatrixXd& residual_);
   double update_t_distribution(const Eigen::MatrixXd& residual_, const double& sigma_, const double& nu_);
   void update_weight_matrix(const Eigen::MatrixXd& residual_, const double& sigma_, const double& nu_, Eigen::MatrixXd& W_);
+  void multiply_weight_matrix(const Eigen::MatrixXd& J_, const Eigen::MatrixXd& W_, Eigen::MatrixXd& JW_);
 
 
 private: // Scripts
