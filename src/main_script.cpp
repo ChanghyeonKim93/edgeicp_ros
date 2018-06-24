@@ -78,23 +78,27 @@ int main(int argc, char **argv) {
 	Edgeicp::Parameters params;
 	params.debug.imgShowFlag   = dbgFlag;
 
-	params.calib.fx 					 = 620.608832234754;
-	params.calib.fy            = 619.113993685335;
-	params.calib.cx            = 323.902900972212;
-	params.calib.cy            = 212.418428046497;
+	//params.calib.fx 					 = 620.608832234754;
+	//params.calib.fy            = 619.113993685335;
+	//params.calib.cx            = 323.902900972212;
+	//params.calib.cy            = 212.418428046497;
+	params.calib.fx 					 = 535.4;
+	params.calib.fy            = 539.2;
+	params.calib.cx            = 320.1;
+	params.calib.cy            = 247.6;
 	params.calib.depthScale    = 1.0;
 	params.calib.width         = 640;
 	params.calib.height      	 = 480;
 
 	params.hyper.nSample       = 600;  // the number of sub sampling method.
-	params.hyper.maxIter       = 2;   // maximum iteration number of optimization. ( 20 ~ 30 )
+	params.hyper.maxIter       = 20;   // maximum iteration number of optimization. ( 20 ~ 30 )
 	params.hyper.shiftIter     = 7;    // find correspondences by 4 dimensions until shiftIterations. After, we use 2 dimensions matcher.
 	params.hyper.treeDistThres = 15.0; // distance thresholding during kd tree searching.
 	params.hyper.transThres    = 0.05; //
 	params.hyper.rotThres      = 3.0;
 
 	params.canny.lowThres			 = 70;
-	params.canny.highThres		 = 200;
+	params.canny.highThres		 = 170;
 
 
 	Edgeicp *edgeicp = new Edgeicp(params);
