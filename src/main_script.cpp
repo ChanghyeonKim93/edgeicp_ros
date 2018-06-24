@@ -47,12 +47,17 @@ int main(int argc, char **argv) {
 	ros::NodeHandle nh("~");
 
 	std::string imgTopicName, depthTopicName;
-	bool dbgFlag;
+	bool dbgFlagImshow, dbgFlagText;
+	int nSample, maxIter;
 
 	// Get ROS parameters from launch file.
-	ros::param::get("~color_topic_name", imgTopicName);
-	ros::param::get("~depth_topic_name", depthTopicName);
-	ros::param::get("~debug_flag",dbgFlag);
+	ros::param::get("~color_topic_name",  imgTopicName);
+	ros::param::get("~depth_topic_name",  depthTopicName);
+
+	ros::param::get("~debug_flag_imshow", dbgFlagImshow);
+	ros::param::get("~debug_flag_text",   dbgFlagText);
+	ros::param::get("~nSample",					  nSample);
+	ros::param::get("~maxIter",						maxIter);
 
 	// Initialize subscribers.
 	message_filters::Subscriber<sensor_msgs::Image> colorImgSubs(nh , imgTopicName , 1 );
@@ -76,7 +81,8 @@ int main(int argc, char **argv) {
 
 	// Define algorithm parameters
 	Edgeicp::Parameters params;
-	params.debug.imgShowFlag   = dbgFlag;
+	params.debug.imgShowFlag   = dbgFlagImshow;
+	params.debug.textShowFlag  = dbgFlagText;
 
 	//params.calib.fx 					 = 620.608832234754;
 	//params.calib.fy            = 619.113993685335;
@@ -90,15 +96,15 @@ int main(int argc, char **argv) {
 	params.calib.width         = 640;
 	params.calib.height      	 = 480;
 
-	params.hyper.nSample       = 600;  // the number of sub sampling method.
-	params.hyper.maxIter       = 20;   // maximum iteration number of optimization. ( 20 ~ 30 )
+	params.hyper.nSample       = nSample;  // the number of sub sampling method.
+	params.hyper.maxIter       = maxIter;   // maximum iteration number of optimization. ( 20 ~ 30 )
 	params.hyper.shiftIter     = 7;    // find correspondences by 4 dimensions until shiftIterations. After, we use 2 dimensions matcher.
 	params.hyper.treeDistThres = 15.0; // distance thresholding during kd tree searching.
 	params.hyper.transThres    = 0.05; //
 	params.hyper.rotThres      = 3.0;
 
-	params.canny.lowThres			 = 70;
-	params.canny.highThres		 = 170;
+	params.canny.lowThres			 = 60;
+	params.canny.highThres		 = 130;
 
 
 	Edgeicp *edgeicp = new Edgeicp(params);
@@ -170,5 +176,5 @@ int main(int argc, char **argv) {
  	double curTime_tmp = (double)(msgColor->header.stamp.sec*1e6+msgColor->header.stamp.nsec/1000)/1000000.0;
  	imgTime = dtos(curTime_tmp);
  	imgUpdated = true;
- 	//ROS_INFO_STREAM("Image subsc - RGBD images are updated.");
+ 	ROS_INFO_STREAM("Image subsc - RGBD images are updated.");
  }

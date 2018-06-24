@@ -3,6 +3,12 @@
         <!--param name="color_topic_name" type="string" value="/camera/rgb/image_raw"/-->
 	      <param name="color_topic_name" type="string" value="/camera/rgb/image_color"/>
         <param name="depth_topic_name" type="string" value="/camera/depth/image"/>
-        <param name="debug_flag" type="bool" value="true"/>
+        <param name="debug_flag_imshow" type="bool" value="false"/>
+        <param name="debug_flag_text" type="bool" value="false"/>
+
+
+        <param name="nSample" type="int" value="700"/>
+        <param name="maxIter" type="int" value="30"/>
+
     </node>
 </launch>

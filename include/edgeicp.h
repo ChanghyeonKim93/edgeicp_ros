@@ -57,6 +57,7 @@ public:
     double treeDistThres;
 	  double transThres;
 	  double rotThres;
+    double tDistNu;
     int nSample;
 	  int maxIter;
 	  int shiftIter;
@@ -68,6 +69,7 @@ public:
     	treeDistThres = 15.0; // pixels, not use
     	transThres    = 0.05; // 2 cm
     	rotThres      = 3.0;  // 3 degree
+      tDistNu           = 2.0;  // t-distribution DOF = 2
     }
   };
 
@@ -85,9 +87,11 @@ public:
   // debug parameters
   struct Debug {
     bool imgShowFlag;
+    bool textShowFlag;
 
     Debug () {
-      imgShowFlag = false; // default setting : do not show the debug images.
+      imgShowFlag  = false; // default setting : do not show the debug images.
+      textShowFlag = false;
     }
   };
 
@@ -145,8 +149,11 @@ private: // Methods used in the algorithm privately.
   void calc_icp_residual_div(const std::vector<PixelData*>& curPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, Eigen::MatrixXd& residual_);
   void warp_pixel_points(const std::vector<PixelData*> inputPixelDataVec_, const Eigen::MatrixXd& tmpXi_, std::vector<PixelData*>& warpedPixelDataVec_);
   void convert_pixeldatavec_to_vecvec2d(const std::vector<PixelData*>& pixelDataVec_, const std::vector<int>& indVec_, std::vector<std::vector<double>>& tmpPixel2Vec_);
-  void calc_ICP_Jacobian_div(const std::vector<PixelData*>& warpedCurPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, Eigen::MatrixXd& J_);
-  
+  void calc_icp_Jacobian_div(const std::vector<PixelData*>& warpedCurPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, Eigen::MatrixXd& J_);
+  double mean_residual(const Eigen::MatrixXd& residual_);
+  double update_t_distribution(const Eigen::MatrixXd& residual_, const double& sigma_, const double& nu_);
+  void update_weight_matrix(const Eigen::MatrixXd& residual_, const double& sigma_, const double& nu_, Eigen::MatrixXd& W_);
+
 
 private: // Scripts
 
@@ -199,9 +206,11 @@ private: // Private variables
   Eigen::MatrixXd tmpXi; // The se(3) from the current keyframe to the current frame.
   Eigen::MatrixXd delXi; // infinitisimal motion update during the optimization.
   Eigen::MatrixXd tmpTransform;
+  Eigen::MatrixXd keyTransform;
 
   std::vector<Eigen::MatrixXd> trajXi; //
-  std::vector<Eigen::MatrixXd> trajSE3;
+  std::vector<Eigen::MatrixXd> trajTransform;
+
 
 };
 #endif
