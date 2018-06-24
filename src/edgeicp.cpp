@@ -37,11 +37,11 @@ Edgeicp::~Edgeicp() {
   // Tree collapse
   if(this->keyTree2 != NULL){
     delete this->keyTree2;
-    std::cout<<"Tree2 is deleted !"<<std::endl;
+    std::cout<<"Tree(2D) is deleted !"<<std::endl;
   }
   if(this->keyTree4 != NULL){
     delete this->keyTree4;
-    std::cout<<"Tree4 is deleted !"<<std::endl;
+    std::cout<<"Tree(4D) is deleted !"<<std::endl;
   }
 
   ROS_INFO_STREAM("Edgeicp node is terminated.\n");
@@ -69,22 +69,28 @@ void Edgeicp::delete_pixeldata(std::vector<PixelData*>& pixelDataVec) { // stora
 
 void Edgeicp::find_valid_mask(const cv::Mat& imgInputEdge, const cv::Mat& imgDepth, const cv::Mat& imgGrad, cv::Mat& imgOutputEdge){
   int numValidPixels = 0; // initialize
+  int numAllPixels   = 0;
   imgOutputEdge.create(imgInputEdge.size(), CV_8UC1);
 
   int u, v;
-  for(v = 0; v < imgInputEdge.rows; v++){
+  for(v = 0; v < imgInputEdge.rows; v++)
+  {
     const uchar  *imgInputEdgePtr = imgInputEdge.ptr<uchar>(v);
-    const ushort *imgDepthPtr     = imgDepth.ptr<ushort>(v);
+    const double *imgDepthPtr     = imgDepth.ptr<double>(v);
     uchar *imgOutputEdgePtr       = imgOutputEdge.ptr<uchar>(v);
 
-    for(u = 0; u < imgInputEdge.cols; u++){
-      if(*(imgInputEdgePtr++) > 0 & *(imgDepthPtr++) > 0){
+    for(u = 0; u < imgInputEdge.cols; u++)
+    {
+      if(*(imgInputEdgePtr++) > 0 & *(imgDepthPtr++) > 0)
+      {
         *(imgOutputEdgePtr++) = 255;
         numValidPixels++;
       }
-      else{
+      else
+      {
         *(imgOutputEdgePtr++) = 0;
       }
+      if(*imgInputEdgePtr > 0) numAllPixels++;
     }
   }
 }
@@ -193,6 +199,7 @@ void Edgeicp::validify_depth(cv::Mat& imgInput) {
       double* imgInputPtr = imgInput.ptr<double>(i);
       for(int u =0; u<imgInput.cols; u++)
       {
+        if(std::isnan(*(imgInputPtr+u))) exit(1);
         if(std::isnan(*(imgInputPtr+u))) *(imgInputPtr+u)=0.0;
       }
     }
@@ -222,6 +229,7 @@ void Edgeicp::calc_gradient(const cv::Mat& imgInput, cv::Mat& imgGradx, cv::Mat&
 }
 
 void Edgeicp::print_motion(const double& x, const double& y, const double& z, const double& roll, const double& pitch, const double& yaw){
+  std::cout<<"Current position - x:"<<x<<", y:"<<y<<", z:"<<z<<", roll:"<<roll<<", pitch:"<<pitch<<", yaw"<<yaw<<std::endl;
 }
 
 void Edgeicp::calc_icp_residual_div(const std::vector<PixelData*>& curPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, std::vector<double>& residualVec_){
@@ -234,7 +242,8 @@ void Edgeicp::calc_icp_residual_div(const std::vector<PixelData*>& curPixelDataV
   int rndNum = rndIdx_.size();
   residualVec_.reserve(0); // I assume that the "residualVec_" is given initialized ( empty )
 
-  for(int i = 0; i < rndNum; i++){
+  for(int i = 0; i < rndNum; i++)
+  {
     xc = curPixelDataVec_[rndIdx_[i]]->u;
     yc = curPixelDataVec_[rndIdx_[i]]->v;
 
@@ -286,6 +295,10 @@ void Edgeicp::warp_pixel_points(const std::vector<PixelData*> inputPixelDataVec_
       std::cout<<"NaN error - function[warp_pixel_points]"<<std::endl;
       exit(1);
     }
+    if(inputPixelDataVec_[k]->d <= 0){
+      std::cout<<"Zero error - function[warp_pixel_points]"<<std::endl;
+      exit(1);
+    }
 
     originalPointTmp(0) = this->params.calib.invFx * (uTmp - this->params.calib.cx) * dTmp; // (u-cu)/fu*depth, unit : [meter]
     originalPointTmp(1) = this->params.calib.invFy * (vTmp - this->params.calib.cy) * dTmp; // (v-cv)/fv*depth, unit : [meter]
@@ -297,13 +310,11 @@ void Edgeicp::warp_pixel_points(const std::vector<PixelData*> inputPixelDataVec_
 
     // project point onto pixel plane and
     // allocate the point information into warpedPixelDataVec
-    /*
+
     double invD = 1.0/warpedPointTmp(2);
     warpedPixelDataVec_[k]->u = this->params.calib.fx*warpedPointTmp(0)*invD + this->params.calib.cx;
     warpedPixelDataVec_[k]->v = this->params.calib.fy*warpedPointTmp(1)*invD + this->params.calib.cy;
     warpedPixelDataVec_[k]->d = warpedPointTmp(2);
-    */
-
   }
 };
 
@@ -416,7 +427,7 @@ void Edgeicp::run() {
     // Canny edge algorithm to detect the edge pixels.
     cv::Canny(this->keyImgLow, this->keyEdgeMap, this->params.canny.lowThres, this->params.canny.highThres);
 
-    // Find valid edge pixels from depth and gradient test.
+    // Find  edge pixels from depth and gradient test.
     Edgeicp::find_valid_mask(this->keyEdgeMap, this->keyDepthLow, this->keyImgGrad, this->keyEdgeMapValid);
 
     // Extract edge pixels and store in vector.
@@ -500,7 +511,7 @@ void Edgeicp::run() {
     double stepSize = 0.7;
 
     // initialize the containers which are exploited in the iterative optimization.
-    //Edgeicp::initialize_pixeldata(this->warpedCurPixelDataVec, this->params.hyper.nSample); // warpedCurPixelDataVec ( length : sampled & reduced number ! )
+    Edgeicp::initialize_pixeldata(this->warpedCurPixelDataVec, this->curPixelDataVec.size()); // warpedCurPixelDataVec ( length : sampled & reduced number ! )
     std::vector<int> refIdx; // reference indices which are matched to the warped current pixels.
 
     while(icpIter < this->params.hyper.maxIter)
@@ -551,7 +562,7 @@ void Edgeicp::run() {
       }
 
       icpIter++;
-      //std::cout<<"      optimization iterations : "<<icpIter<<std::endl;
+      std::cout<<"--- optimization iterations : "<<icpIter<<std::endl;
 
     }
 
@@ -590,7 +601,7 @@ void Edgeicp::run() {
 
 
     // If the distance from the current keyframe to the current frame exceeds the threshold, renew the key frame
-    if(this->numOfImg % 10 == 1)
+    if(this->numOfImg % 7 == 1)
     {
       this->tmpXi       = Eigen::MatrixXd::Zero(6,1);
       this->delXi       = Eigen::MatrixXd::Zero(6,1);
