@@ -101,16 +101,29 @@ void Edgeicp::set_edge_pixels(const cv::Mat& imgInputEdge, const cv::Mat& imgDep
   int u, v;
   pixelDataVec.reserve(0); // initialize the pixelDataVec vector.
 
-  for(v = 0; v < imgInputEdge.rows; v++){
+  for(v = 0; v < imgInputEdge.rows; v++)
+  {
     const uchar* imgInputEdgePtr = imgInputEdge.ptr<uchar>(v);
     const short* imgGradxPtr     = imgGradx.ptr<short>(v);
     const short* imgGradyPtr     = imgGrady.ptr<short>(v);
     const double* imgDepthPtr    = imgDepth.ptr<double>(v);
 
-    for(u = 0; u < imgInputEdge.cols; u++){
-      if(*(imgInputEdgePtr++) == 255){
+    for(u = 0; u < imgInputEdge.cols; u++)
+    {
+      if(*(imgInputEdgePtr++) == 255)
+      {
         double invGradNorm = 1.0/sqrt( (double)((*(imgGradxPtr + u))*(*(imgGradxPtr + u)) + (*(imgGradyPtr + u))*(*(imgGradyPtr + u))) );
-        Edgeicp::PixelData* tmpPixelData = new Edgeicp::PixelData( (double)u, (double)v, (double)*(imgDepthPtr + u), (double)(*(imgGradxPtr + u))*(double)invGradNorm, (double)(*(imgGradyPtr + u))*(double)invGradNorm );
+        double X_, Y_, Z_, u_, v_, d_, gx_, gy_;
+        u_ = (double)u;
+        v_ = (double)v;
+        d_ = (double)(*(imgDepthPtr + u));
+        X_ = (u_ - this->params.calib.cx)/this->params.calib.fx*d_;
+        Y_ = (v_ - this->params.calib.cy)/this->params.calib.fy*d_;
+        Z_ = d_;
+        gx_= (double)(*(imgGradxPtr + u))*(double)invGradNorm;
+        gy_= (double)(*(imgGradyPtr + u))*(double)invGradNorm;
+
+        Edgeicp::PixelData* tmpPixelData = new Edgeicp::PixelData(u_, v_, d_, X_, Y_, Z_, gx_, gy_);
         pixelDataVec.push_back(tmpPixelData);
         cnt++;
       }
@@ -232,7 +245,7 @@ void Edgeicp::print_motion(const double& x, const double& y, const double& z, co
   std::cout<<"Current position - x:"<<x<<", y:"<<y<<", z:"<<z<<", roll:"<<roll<<", pitch:"<<pitch<<", yaw"<<yaw<<std::endl;
 }
 
-void Edgeicp::calc_icp_residual_div(const std::vector<PixelData*>& curPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, std::vector<double>& residualVec_){
+void Edgeicp::calc_icp_residual_div(const std::vector<PixelData*>& curPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, Eigen::MatrixXd& residual_){
 
   // input : this->keyPixelDataVec, this->curPixelDataVec, refIdx, rndIdx
   double xr, yr, xc, yc;
@@ -240,7 +253,7 @@ void Edgeicp::calc_icp_residual_div(const std::vector<PixelData*>& curPixelDataV
   double grad_x, grad_y;
   double resX, resY, resTotal;
   int rndNum = rndIdx_.size();
-  residualVec_.reserve(0); // I assume that the "residualVec_" is given initialized ( empty )
+  //residualVec_.reserve(0); // I assume that the "residualVec_" is given initialized ( empty )
 
   for(int i = 0; i < rndNum; i++)
   {
@@ -261,7 +274,8 @@ void Edgeicp::calc_icp_residual_div(const std::vector<PixelData*>& curPixelDataV
 
     resTotal = resX + resY;
 
-    residualVec_.push_back(resTotal);
+    residual_(i,0) = resTotal;
+    //residualVec_.push_back(resTotal);
   }
 }
 
@@ -271,7 +285,7 @@ void Edgeicp::initialize_pixeldata(std::vector<PixelData*>& inputPixelDataVec_, 
 
   // Insert new PixelData* pointers which are filled with .
   for(int k = 0; k < len_; k++) {
-    Edgeicp::PixelData* tmpPixelData = new Edgeicp::PixelData( -1, -1, -1, -1, -1);
+    Edgeicp::PixelData* tmpPixelData = new Edgeicp::PixelData( -1, -1, -1, 0, 0, 0, -1, -1);
     inputPixelDataVec_.push_back(tmpPixelData);
   }
 };
@@ -283,13 +297,16 @@ void Edgeicp::warp_pixel_points(const std::vector<PixelData*> inputPixelDataVec_
   Eigen::MatrixXd warpedPointTmp   = Eigen::MatrixXd::Zero(4,1); // Homogeneous coordinate.
   lie::se3_exp(tmpXi_, gTmp); // calculate SE3 from se3 tmpXi_.
 
-  double uTmp, vTmp, dTmp;
+  double uTmp, vTmp, dTmp, XTmp, YTmp, ZTmp;
 
   for(int k = 0; k < inputPixelDataVec_.size(); k++)
   {
     uTmp = inputPixelDataVec_[k]->u;
     vTmp = inputPixelDataVec_[k]->v;
     dTmp = inputPixelDataVec_[k]->d;
+    XTmp = inputPixelDataVec_[k]->X;
+    YTmp = inputPixelDataVec_[k]->Y;
+    ZTmp = inputPixelDataVec_[k]->Z;
 
     if(isnan(inputPixelDataVec_[k]->d)){
       std::cout<<"NaN error - function[warp_pixel_points]"<<std::endl;
@@ -300,10 +317,10 @@ void Edgeicp::warp_pixel_points(const std::vector<PixelData*> inputPixelDataVec_
       exit(1);
     }
 
-    originalPointTmp(0) = this->params.calib.invFx * (uTmp - this->params.calib.cx) * dTmp; // (u-cu)/fu*depth, unit : [meter]
-    originalPointTmp(1) = this->params.calib.invFy * (vTmp - this->params.calib.cy) * dTmp; // (v-cv)/fv*depth, unit : [meter]
-    originalPointTmp(2) = dTmp; // depth [meter]
-    originalPointTmp(3) = 1.0;
+    originalPointTmp(0,0) = XTmp; // (u-cu)/fu*depth, unit : [meter]
+    originalPointTmp(1,0) = YTmp; // (v-cv)/fv*depth, unit : [meter]
+    originalPointTmp(2,0) = ZTmp; // depth [meter]
+    originalPointTmp(3,0) = 1.0;
 
     // warp points.
     warpedPointTmp = gTmp * originalPointTmp;
@@ -311,18 +328,21 @@ void Edgeicp::warp_pixel_points(const std::vector<PixelData*> inputPixelDataVec_
     // project point onto pixel plane and
     // allocate the point information into warpedPixelDataVec
 
-    double invD = 1.0/warpedPointTmp(2);
-    warpedPixelDataVec_[k]->u = this->params.calib.fx*warpedPointTmp(0)*invD + this->params.calib.cx;
-    warpedPixelDataVec_[k]->v = this->params.calib.fy*warpedPointTmp(1)*invD + this->params.calib.cy;
-    warpedPixelDataVec_[k]->d = warpedPointTmp(2);
+    double invD = 1.0/warpedPointTmp(2,0);
+    warpedPixelDataVec_[k]->u = this->params.calib.fx*warpedPointTmp(0,0)*invD + this->params.calib.cx;
+    warpedPixelDataVec_[k]->v = this->params.calib.fy*warpedPointTmp(1,0)*invD + this->params.calib.cy;
+    warpedPixelDataVec_[k]->d = warpedPointTmp(2,0);
+
+    warpedPixelDataVec_[k]->X = warpedPointTmp(0,0);
+    warpedPixelDataVec_[k]->Y = warpedPointTmp(1,0);
+    warpedPixelDataVec_[k]->Z = warpedPointTmp(2,0);
+
   }
 };
 
 void Edgeicp::convert_pixeldatavec_to_vecvec2d(const std::vector<PixelData*>& pixelDataVec_, const std::vector<int>& indVec_, std::vector<std::vector<double>>& tmpPixel2Vec_){
 
-      if(tmpPixel2Vec_.size() > 0){
-        tmpPixel2Vec_.reserve(0);
-      }
+      if(tmpPixel2Vec_.size() > 0) tmpPixel2Vec_.reserve(0);
       tmpPixel2Vec_.reserve(0);
 
       double invWidth = 1.0 / (double)this->params.calib.width;
@@ -337,27 +357,31 @@ void Edgeicp::convert_pixeldatavec_to_vecvec2d(const std::vector<PixelData*>& pi
 
 // TODO: !!!
 /*
-void Edgeicp::calc_ICP_Jacobian_div(){
+void Edgeicp::calc_ICP_Jacobian_div(const std::vector<PixelData*>& warpedCurPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, Eigen::MatrixXd& J_) {
   double fx = this->params.calib.fx;
   double fy = this->params.calib.fy;
   double cx = this->params.calib.cx;
   double cy = this->params.calib.cy;
+  double gx, gy;
   double invZ;
 
   // X Y Z : warped points.
-  for(int i = 0; i < 1; i++){
+  for(int i = 0; i < 1; i++)
+  {
+    xWarped = warpedCurPixelDataVec_[rndIdx_[i]]->u
     invZ = 1.0;
     invZinvZ = invZ*invZ;
 
-    J[0,i] = fx*invZ*gx;
-    J[1,i] = fy*invZ*gy;
-    J[2,i] = -fx*X*invZinvZ*gx - fy*Y*invZinvZ*gy;
-    J[3,i] = -fx*X*Y*invZinvZ*gx - fy*(1+Y*Y*invZinvZ)*gy;
-    J[4,i] = fx*(1+X*X*invZinvZ)*gx + fy*X*Y*invZinvZ*gy;
-    J[5,i] = -fx*Y*invZ*gx + fy*X*invZ*gy;
+    J_(i,0) = fx*invZ*gx;
+    J_(i,1) = fy*invZ*gy;
+    J_(i,2) = -fx*X*invZinvZ*gx - fy*Y*invZinvZ*gy;
+    J_(i,3) = -fx*X*Y*invZinvZ*gx - fy*(1+Y*Y*invZinvZ)*gy;
+    J_(i,4) = fx*(1+X*X*invZinvZ)*gx + fy*X*Y*invZinvZ*gy;
+    J_(i,5) = -fx*Y*invZ*gx + fy*X*invZ*gy;
   }
 }
 */
+
 /* double Edgeicp::update_t_distribution(const std::vector<double>& residualVec_){
   int nSample = 1000;
   int N = residualVec_.size();
@@ -513,19 +537,25 @@ void Edgeicp::run() {
     // initialize the containers which are exploited in the iterative optimization.
     Edgeicp::initialize_pixeldata(this->warpedCurPixelDataVec, this->curPixelDataVec.size()); // warpedCurPixelDataVec ( length : sampled & reduced number ! )
     std::vector<int> refIdx; // reference indices which are matched to the warped current pixels.
+    Eigen::MatrixXd J        = Eigen::MatrixXd::Zero(this->params.hyper.nSample,6);
+    Eigen::MatrixXd W        = Eigen::MatrixXd::Zero(this->params.hyper.nSample,1);
+    Eigen::MatrixXd JW       = Eigen::MatrixXd::Zero(this->params.hyper.nSample,6);
+    Eigen::MatrixXd Hessian  = Eigen::MatrixXd::Zero(6, 6);
+    Eigen::MatrixXd residual = Eigen::MatrixXd::Zero(this->params.hyper.nSample,1);
 
+    std::cout<<"----------------------------------------------------"<<std::endl;
     while(icpIter < this->params.hyper.maxIter)
     {
       // initialize containers.
       std::vector<std::vector<double>> tmpPixel2Vec; // For kdtree NN search. Temporary vector container.
       tmpPixel2Vec.reserve(0);
-      std::vector<double> residualVec;
+      // std::vector<double> residualVec;
 
       // TODO: warp the current points, ( using "warpedCurPixelDataVec" )
       Edgeicp::warp_pixel_points(this->curPixelDataVec, this->tmpXi, this->warpedCurPixelDataVec);
       // maybe, this->curPixelDataVec to this->warpedCurPixelDataVec is not complete... Due to this, segfault occurs.
       // TODO: reallocate the warped current points to the
-      Edgeicp::convert_pixeldatavec_to_vecvec2d(this->curPixelDataVec, rndIdx, tmpPixel2Vec);
+      Edgeicp::convert_pixeldatavec_to_vecvec2d(this->warpedCurPixelDataVec, rndIdx, tmpPixel2Vec);
 
       // TODO: NN search using "warpedCur"
       if(icpIter < this->params.hyper.shiftIter) // 4-D kdtree approximated NN search
@@ -537,13 +567,27 @@ void Edgeicp::run() {
         this->keyTree2->kdtree_nearest_neighbor(tmpPixel2Vec, refIdx);
       }
       // TODO: residual calculation
-      Edgeicp::calc_icp_residual_div(this->curPixelDataVec, this->keyPixelDataVec, rndIdx, refIdx, residualVec);
+      Edgeicp::calc_icp_residual_div(this->warpedCurPixelDataVec, this->keyPixelDataVec, rndIdx, refIdx, residual);
 
-      // TODO: t-distribution update ( update_t_distribution )
+      // TODO: t-distribution weight matrix update ( update_t_distribution )
       if(icpIter > 5) // t-distribution weighting after 5 iterations
       {
 
       }
+      /*
+       * % Hessian & Jacobian
+       * J = calc_ICP_Jacobian_div(ref_pts, warp_pts, g_vec, ref_ind, xi_temp);
+       * % residual reweighting
+       * W = ones(length(residual),1);
+       * if(icp_iter >=5)
+       *     W = update_weight_matrix(residual, sig_r,nu);
+       * end
+       * JW          = bsxfun(@times,J,W);
+       * residualW   = bsxfun(@times,residual,W);
+       * Hessian     = JW.'*J;
+       * delta_xi    = -stepScale*(Hessian + lambda*diag(diag(Hessian)))^-1*JW.'*residual;
+       */
+
       // TODO: calculate Jacobian matrix ( calc_ICP_Jacobian_div )
 
       // TODO: residual reweighting ( update_weight_matrix )
@@ -554,8 +598,8 @@ void Edgeicp::run() {
 
       // TODO: delta_xi calculation.
 
-      // TODO: xi_temp = xi_temp + delta_xi;
-
+      // TODO: xi_temp = xi_temp + delta_xi. update ~
+      tmpXi += delXi;
       // TODO: iteration stop condition
       if(0) {
         break;
@@ -563,8 +607,8 @@ void Edgeicp::run() {
 
       icpIter++;
       std::cout<<"--- optimization iterations : "<<icpIter<<std::endl;
-
     }
+    std::cout<<std::endl;
 
     // showing the debuging image.
     if(this->params.debug.imgShowFlag == true)

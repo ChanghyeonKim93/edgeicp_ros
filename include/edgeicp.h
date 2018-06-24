@@ -105,13 +105,19 @@ private: // related to PixelData
     double u;
     double v;
     double d;
-    double gy;
+    double X;
+    double Y;
+    double Z;
     double gx;
+    double gy;
 
-    PixelData_(double u_, double v_, double d_, double gx_, double gy_) {
+    PixelData_(double u_, double v_, double d_, double X_, double Y_, double Z_, double gx_, double gy_) {
       u  = u_;
       v  = v_;
       d  = d_;
+      X  = X_;
+      Y  = Y_;
+      Z  = Z_;
       gx = gx_;
       gy = gy_;
     }
@@ -136,7 +142,7 @@ private: // Methods used in the algorithm privately.
   void calc_gradient(const cv::Mat& imgInput, cv::Mat& imgGradx, cv::Mat& imgGrady, cv::Mat& imgGrad, const bool& doGaussian);
   void find_valid_mask(const cv::Mat& imgInputEdge, const cv::Mat& imgDepth, const cv::Mat& imgGrad, cv::Mat& imgOutputEdge);
   void set_edge_pixels(const cv::Mat& imgInputEdge, const cv::Mat& imgDepth, const cv::Mat& imgGradx, const cv::Mat& imgGrady, const cv::Mat& imgGrad, std::vector<Edgeicp::PixelData*>& pixelDataVec);
-  void calc_icp_residual_div(const std::vector<PixelData*>& curPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, std::vector<double>& residualVec_);
+  void calc_icp_residual_div(const std::vector<PixelData*>& curPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, Eigen::MatrixXd& residual_);
   void warp_pixel_points(const std::vector<PixelData*> inputPixelDataVec_, const Eigen::MatrixXd& tmpXi_, std::vector<PixelData*>& warpedPixelDataVec_);
   void convert_pixeldatavec_to_vecvec2d(const std::vector<PixelData*>& pixelDataVec_, const std::vector<int>& indVec_, std::vector<std::vector<double>>& tmpPixel2Vec_);
 
