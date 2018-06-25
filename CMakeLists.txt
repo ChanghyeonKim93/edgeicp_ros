@@ -20,7 +20,7 @@ catkin_package(
 set(includeDirs ${includeDirs} ${CMAKE_CURRENT_BINARY_DIR})
 set(includeDirs ${includeDirs} include)
 
-set(SRC ${SRC} 
+set(SRC ${SRC}
 	src/main_script.cpp
 	src/edgeicp.cpp
 	src/Liegroup.cpp
@@ -41,7 +41,7 @@ include_directories( ${Eigen_INCLUDE_DIRS} )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg -O2 -m64 -Ofast -flto -msse2 -msse3 -march=native -mfpmath=sse")
-#set(DCMAKE_build_type debug)
+set(DCMAKE_build_type release)
 
 add_executable (edgeicp_node ${SRC} )
 target_link_libraries (edgeicp_node ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})

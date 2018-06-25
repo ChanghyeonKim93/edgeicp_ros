@@ -644,8 +644,8 @@ void Edgeicp::run() {
       diagH(3,3) = H(3,3);
       diagH(4,4) = H(4,4);
       diagH(5,5) = H(5,5);
-      HAugmented = H + lambda*diagH;
-
+      //HAugmented = H + lambda*diagH;
+      HAugmented = H;
       // TODO: delta_xi calculation.
       this->delXi = -stepScale * HAugmented.inverse() * JW.transpose() * residual;
 
@@ -665,7 +665,7 @@ void Edgeicp::run() {
         }
         if(fabs(errNow - errPrev)<=4*1e-6 || (icpIter >= 40 && fabs(errNow - errPrev)<=1e-4))
         {
-          if(icpIter >= 30) break;
+          if(icpIter >= 20) break;
         }
       }
       if(this->params.debug.textShowFlag == true)
@@ -673,8 +673,10 @@ void Edgeicp::run() {
         std::cout<<"--- DEBUG optimization iterations:"<<icpIter;
         printf(", lambda:%0.1lf",lambda);
         printf(", res(avg):%0.7lf",errNow);
-        printf(", err rate [pcnt]:%0.3lf",(errNow-errPrev)/errPrev*100.0);
-        printf(", wx:%0.5lf, wy:%0.5lf, wz:%0.5lf, vx:%0.5lf, vy:%0.5lf, vz:%0.5lf\n",tmpXi(0,0),tmpXi(1,0),tmpXi(2,0),tmpXi(3,0),tmpXi(4,0),tmpXi(5,0));
+        printf(", err descend rate [pcnt]:%0.3lf",(errNow-errPrev)/errPrev*100.0);
+        printf(", del xi:%0.5lf",sqrt(delXi(0,0)*delXi(0,0) + delXi(1,0)*delXi(1,0) +delXi(2,0)*delXi(2,0) +delXi(3,0)*delXi(3,0) +delXi(4,0)*delXi(4,0) +delXi(5,0)*delXi(5,0) ));
+        //printf(", wx:%0.5lf, wy:%0.5lf, wz:%0.5lf, vx:%0.5lf, vy:%0.5lf, vz:%0.5lf\n",tmpXi(0,0),tmpXi(1,0),tmpXi(2,0),tmpXi(3,0),tmpXi(4,0),tmpXi(5,0));
+        printf("\n");
       }
       errPrev = errNow;
       icpIter++;
