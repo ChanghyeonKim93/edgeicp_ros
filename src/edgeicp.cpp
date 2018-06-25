@@ -31,8 +31,13 @@ Edgeicp::Edgeicp(Parameters params_) : params(params_) {
 Edgeicp::~Edgeicp() {
   // All dynamic allocations must be deleted !!
   Edgeicp::delete_pixeldata(this->curPixelDataVec);
+  std::cout<<"curPixelDataVec is deleted !"<<std::endl;
+
   Edgeicp::delete_pixeldata(this->keyPixelDataVec);
+  std::cout<<"keyPixelDataVec is deleted !"<<std::endl;
+
   Edgeicp::delete_pixeldata(this->warpedCurPixelDataVec);
+  std::cout<<"warpedCurPixelDataVec is deleted !"<<std::endl;
 
   // Tree collapse
   if(this->keyTree2 != NULL){
@@ -278,14 +283,24 @@ void Edgeicp::calc_icp_residual_div(const std::vector<PixelData*>& curPixelDataV
   }
 }
 
-void Edgeicp::initialize_pixeldata(std::vector<PixelData*>& inputPixelDataVec_, const int& len_){ // fill all entry 0.
+void Edgeicp::initialize_pixeldata(const std::vector<PixelData*>& inputPixelDataVec_, std::vector<PixelData*>& outputPixelDataVec_){ // fill all entry 0.
   // Firstly, delete all entry in the std::vector<PixelData*>.
-  Edgeicp::delete_pixeldata(inputPixelDataVec_);
+  Edgeicp::delete_pixeldata(outputPixelDataVec_);
 
   // Insert new PixelData* pointers which are filled with .
-  for(int k = 0; k < len_; k++) {
-    Edgeicp::PixelData* tmpPixelData = new Edgeicp::PixelData( -1, -1, -1, 0, 0, 0, -1, -1);
-    inputPixelDataVec_.push_back(tmpPixelData);
+  double u,v,d,X,Y,Z,gx,gy;
+  for(int k = 0; k < inputPixelDataVec_.size(); k++) {
+    u = inputPixelDataVec_[k]->u;
+    v = inputPixelDataVec_[k]->v;
+    d = inputPixelDataVec_[k]->d;
+    X = inputPixelDataVec_[k]->X;
+    Y = inputPixelDataVec_[k]->Y;
+    Z = inputPixelDataVec_[k]->Z;
+    gx = inputPixelDataVec_[k]->gx;
+    gy = inputPixelDataVec_[k]->gy;
+
+    Edgeicp::PixelData* tmpPixelData = new Edgeicp::PixelData(u,v,d,X,Y,Z,gx,gy);
+    outputPixelDataVec_.push_back(tmpPixelData);
   }
 };
 
@@ -351,6 +366,23 @@ void Edgeicp::convert_pixeldatavec_to_vecvec2d(const std::vector<PixelData*>& pi
         tmpPixel2.push_back( pixelDataVec_[indVec_[i]]->u*invWidth);
         tmpPixel2.push_back( pixelDataVec_[indVec_[i]]->v*invWidth);
         tmpPixel2Vec_.push_back(tmpPixel2);
+      }
+};
+
+void Edgeicp::convert_pixeldatavec_to_vecvec4d(const std::vector<PixelData*>& pixelDataVec_, const std::vector<int>& indVec_, std::vector<std::vector<double>>& tmpPixel4Vec_){
+
+      if(tmpPixel4Vec_.size() > 0) tmpPixel4Vec_.reserve(0);
+      tmpPixel4Vec_.reserve(0);
+
+      double invWidth = 1.0 / (double)this->params.calib.width;
+      for(int i = 0; i < indVec_.size(); i++)
+      {
+        std::vector<double> tmpPixel4;
+        tmpPixel4.push_back( pixelDataVec_[indVec_[i]]->u*invWidth);
+        tmpPixel4.push_back( pixelDataVec_[indVec_[i]]->v*invWidth);
+        tmpPixel4.push_back( pixelDataVec_[indVec_[i]]->gx);
+        tmpPixel4.push_back( pixelDataVec_[indVec_[i]]->gy);
+        tmpPixel4Vec_.push_back(tmpPixel4);
       }
 };
 
@@ -498,16 +530,22 @@ void Edgeicp::run() {
 
     // At this location, kd tree construction.
     double invWidth = 1.0 / (double)this->params.calib.width;
-    std::vector<std::vector<double>> tmpPixel2Vec;
+    std::vector<std::vector<double>> tmpPixel2Vec, tmpPixel4Vec;
     tmpPixel2Vec.reserve(0);
+    tmpPixel4Vec.reserve(0);
     for(int i = 0; i < this->keyPixelDataVec.size(); i++)
     {
-    	std::vector<double> tmpPixel2;
-    	tmpPixel2.push_back(this->keyPixelDataVec[i]->u*invWidth);
-      tmpPixel2.push_back(this->keyPixelDataVec[i]->v*invWidth);
-    	tmpPixel2Vec.push_back(tmpPixel2);
+    	std::vector<double> tmpPixel;
+    	tmpPixel.push_back(this->keyPixelDataVec[i]->u*invWidth);
+      tmpPixel.push_back(this->keyPixelDataVec[i]->v*invWidth);
+    	tmpPixel2Vec.push_back(tmpPixel);
+      tmpPixel.push_back(this->keyPixelDataVec[i]->gx);
+      tmpPixel.push_back(this->keyPixelDataVec[i]->gy);
+      tmpPixel4Vec.push_back(tmpPixel);
     }
+
     this->keyTree2 = new KDTree( tmpPixel2Vec, (this->params.hyper.treeDistThres*this->params.hyper.treeDistThres)/(this->params.calib.width*this->params.calib.width));
+    this->keyTree4 = new KDTree( tmpPixel4Vec, (this->params.hyper.treeDistThres*this->params.hyper.treeDistThres)/(this->params.calib.width*this->params.calib.width));
 
     // Initialize the current images
     this->keyEdgeMap.copyTo(this->curEdgeMap);
@@ -546,7 +584,6 @@ void Edgeicp::run() {
 
     // Store the pixel coordinates in vector with sampled number of points.
     std::vector<int> rndIdx;
-    rndIdx.reserve(0);
     rnd::randsample(this->curPixelDataVec.size(), this->params.hyper.nSample, rndIdx); //sampling without replacement
 
     // Deprived
@@ -569,14 +606,14 @@ void Edgeicp::run() {
     // ====================== Iterative optimization ! ====================== //
     // ====================================================================== //
     int    icpIter   = 1;
-    double errNow    = 0;
-    double errPrev   = 1e12;
-    double lambda    = 0.05;
+    double errNow    = -1;
+    double errPrev   = 1e9;
+    double lambda    = 0.01;
     double stepScale = 0.7;
     double tSigma    = 1.0; // initial value. any value is okay.
 
     // initialize the containers exploited in the iterative optimization.
-    Edgeicp::initialize_pixeldata(this->warpedCurPixelDataVec, this->curPixelDataVec.size()); // warpedCurPixelDataVec ( length : sampled & reduced number ! )
+    Edgeicp::initialize_pixeldata(this->curPixelDataVec, this->warpedCurPixelDataVec); // warpedCurPixelDataVec ( length : sampled & reduced number ! )
     std::vector<int> refIdx; // reference indices which are matched to the warped current pixels.
     Eigen::MatrixXd J           = Eigen::MatrixXd::Zero(rndIdx.size(), 6);
     Eigen::MatrixXd W           = Eigen::MatrixXd::Ones(rndIdx.size(), 1);
@@ -592,8 +629,9 @@ void Edgeicp::run() {
     while(icpIter < this->params.hyper.maxIter)
     {
       // initialize containers.
-      std::vector<std::vector<double>> tmpPixel2Vec; // For kdtree NN search. Temporary vector container.
+      std::vector<std::vector<double>> tmpPixel2Vec, tmpPixel4Vec; // For kdtree NN search. Temporary vector container.
       tmpPixel2Vec.reserve(0);
+      tmpPixel4Vec.reserve(0);
 
       // TODO: warp the current points, ( using "warpedCurPixelDataVec" )
       Edgeicp::warp_pixel_points(this->curPixelDataVec, this->tmpXi, this->warpedCurPixelDataVec);
@@ -601,11 +639,12 @@ void Edgeicp::run() {
 
       // TODO: reallocate the warped current points.
       Edgeicp::convert_pixeldatavec_to_vecvec2d(this->warpedCurPixelDataVec, rndIdx, tmpPixel2Vec);
+      Edgeicp::convert_pixeldatavec_to_vecvec4d(this->warpedCurPixelDataVec, rndIdx, tmpPixel4Vec);
 
       // TODO: NN search using "warpedCur"
-      if(icpIter < this->params.hyper.shiftIter) // 4-D kdtree approximated NN search
+      if(0 & icpIter < this->params.hyper.shiftIter) // 4-D kdtree approximated NN search
       {
-        this->keyTree2->kdtree_nearest_neighbor(tmpPixel2Vec, refIdx);
+        this->keyTree4->kdtree_nearest_neighbor(tmpPixel4Vec, refIdx);
       }
       else // 2-D kdtree search exact NN search
       {
@@ -623,7 +662,7 @@ void Edgeicp::run() {
       Edgeicp::calc_icp_Jacobian_div(warpedCurPixelDataVec, keyPixelDataVec, rndIdx, refIdx, J);
 
       // TODO: t-distribution weight matrix update ( update_t_distribution )
-      if(icpIter >= 5) // t-distribution weighting after 5 iterations
+      if(icpIter >= 4) // t-distribution weighting after 5 iterations
       {
         // TODO: find t-distribution fitting the current residual. ( update_weight_matrix )
         tSigma = Edgeicp::update_t_distribution(residual, tSigma, this->params.hyper.tDistNu);
@@ -653,12 +692,13 @@ void Edgeicp::run() {
       this->tmpXi += this->delXi;
 
       // TODO: adjust lambda & stepScale
+      /*
       if(icpIter > 1)
       {
-        if(errNow >= errPrev || (fabs(errNow - errPrev) / errPrev) <= 1e-2)
+        if(errNow >= errPrev || (fabs(errNow - errPrev) <= 1e-3)
         {
           lambda       *= 2.0;
-          stepScale    *= 1.2;
+          stepScale    *= 1.1;
 
           if(stepScale >= 1)  stepScale  = 1;
           if(lambda >= 30)    lambda     = 30;
@@ -668,13 +708,38 @@ void Edgeicp::run() {
           if(icpIter >= 20) break;
         }
       }
+      */
+
+      double normDelXi = sqrt(delXi(0,0)*delXi(0,0) + delXi(1,0)*delXi(1,0) +delXi(2,0)*delXi(2,0) +delXi(3,0)*delXi(3,0) +delXi(4,0)*delXi(4,0) +delXi(5,0)*delXi(5,0) );
+      if(icpIter > 1)
+      {
+        if( fabs(errPrev - errNow) < 1e-3 || errNow > errPrev )
+        {
+          lambda       *= 2.0;
+          stepScale    *= 1.1;
+
+          if(stepScale >= 1)  stepScale  = 1;
+          if(lambda >= 20)    lambda     = 20;
+        }
+
+        if(fabs(errPrev - errNow) < 1.0*1e-5 || normDelXi < 5*1e-6 || icpIter > 100 )
+        {
+          if(fabs(errPrev - errNow) < 1.0*1e-5) std::cout<<":::: Determination: [1] ERROR RATE."<<std::endl;
+          if(normDelXi < 5*1e-6) std::cout<<":::: Determination: [2] normDelXi."<<std::endl;
+          if(icpIter > 100) std::cout<<":::: Determination: [3] icpIter."<<std::endl;
+          break;
+        }
+      }
+
+
+
       if(this->params.debug.textShowFlag == true)
       {
         std::cout<<"--- DEBUG optimization iterations:"<<icpIter;
         printf(", lambda:%0.1lf",lambda);
         printf(", res(avg):%0.7lf",errNow);
-        printf(", err descend rate [pcnt]:%0.3lf",(errNow-errPrev)/errPrev*100.0);
-        printf(", del xi:%0.5lf",sqrt(delXi(0,0)*delXi(0,0) + delXi(1,0)*delXi(1,0) +delXi(2,0)*delXi(2,0) +delXi(3,0)*delXi(3,0) +delXi(4,0)*delXi(4,0) +delXi(5,0)*delXi(5,0) ));
+        printf(", err descend amount:%0.7lf",(errPrev - errNow));
+        printf(", del xi:%0.5lf", normDelXi);
         //printf(", wx:%0.5lf, wy:%0.5lf, wz:%0.5lf, vx:%0.5lf, vy:%0.5lf, vz:%0.5lf\n",tmpXi(0,0),tmpXi(1,0),tmpXi(2,0),tmpXi(3,0),tmpXi(4,0),tmpXi(5,0));
         printf("\n");
       }
@@ -768,18 +833,23 @@ void Edgeicp::run() {
 
       // At this location, kd tree re-construction.
       double invWidth = 1.0 / (double)this->params.calib.width;
-      std::vector<std::vector<double>> tmpPixel2Vec;
+      std::vector<std::vector<double>> tmpPixel2Vec, tmpPixel4Vec;
       tmpPixel2Vec.reserve(0);
-
-      for(int i = 0; i < this->keyPixelDataVec.size(); i++) {
-      	std::vector<double> tmpPixel2;
-      	tmpPixel2.push_back(this->keyPixelDataVec[i]->u*invWidth);
-        tmpPixel2.push_back(this->keyPixelDataVec[i]->v*invWidth);
-      	tmpPixel2Vec.push_back(tmpPixel2);
+      tmpPixel4Vec.reserve(0);
+      for(int i = 0; i < this->keyPixelDataVec.size(); i++)
+      {
+      	std::vector<double> tmpPixel;
+      	tmpPixel.push_back(this->keyPixelDataVec[i]->u*invWidth);
+        tmpPixel.push_back(this->keyPixelDataVec[i]->v*invWidth);
+      	tmpPixel2Vec.push_back(tmpPixel);
+        tmpPixel.push_back(this->keyPixelDataVec[i]->gx);
+        tmpPixel.push_back(this->keyPixelDataVec[i]->gy);
+        tmpPixel4Vec.push_back(tmpPixel);
       }
 
       // Build new k-d tree.
       this->keyTree2 = new KDTree( tmpPixel2Vec, (this->params.hyper.treeDistThres*this->params.hyper.treeDistThres)/(this->params.calib.width*this->params.calib.width));
+      this->keyTree4 = new KDTree( tmpPixel4Vec, (this->params.hyper.treeDistThres*this->params.hyper.treeDistThres)/(this->params.calib.width*this->params.calib.width));
     }
   }
 

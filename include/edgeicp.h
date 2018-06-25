@@ -78,8 +78,8 @@ public:
     int highThres;
 
     Cannyparameters () {
-      lowThres      = 80;
-      highThres     = 170;
+      lowThres      = 60;
+      highThres     = 150;
     }
   };
 
@@ -127,8 +127,7 @@ private: // related to PixelData
     }
   } PixelData;
   void delete_pixeldata(std::vector<PixelData*>& pixelDataVec);
-  void initialize_pixeldata(std::vector<PixelData*>& inputPixelDataVec_, const int& len_);
-
+  void initialize_pixeldata(const std::vector<PixelData*>& inputPixelDataVec_, std::vector<PixelData*>& outputPixelDataVec_);
 
 public: // Methods used in main_script.cpp
   Edgeicp(Parameters params_); // constructor
@@ -149,6 +148,7 @@ private: // Methods used in the algorithm privately.
   void calc_icp_residual_div(const std::vector<PixelData*>& curPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, Eigen::MatrixXd& residual_);
   void warp_pixel_points(const std::vector<PixelData*> inputPixelDataVec_, const Eigen::MatrixXd& tmpXi_, std::vector<PixelData*>& warpedPixelDataVec_);
   void convert_pixeldatavec_to_vecvec2d(const std::vector<PixelData*>& pixelDataVec_, const std::vector<int>& indVec_, std::vector<std::vector<double>>& tmpPixel2Vec_);
+  void convert_pixeldatavec_to_vecvec4d(const std::vector<PixelData*>& pixelDataVec_, const std::vector<int>& indVec_, std::vector<std::vector<double>>& tmpPixel4Vec_);
   void calc_icp_Jacobian_div(const std::vector<PixelData*>& warpedCurPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, Eigen::MatrixXd& J_);
   double mean_residual(const Eigen::MatrixXd& residual_);
   double update_t_distribution(const Eigen::MatrixXd& residual_, const double& sigma_, const double& nu_);

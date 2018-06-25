@@ -42,9 +42,9 @@ inline double distance_squared( const std::vector<double>& a, const std::vector<
 
 struct Node{
     double key;	///< the key (value along k-th dimension) of the split
-    int LIdx;	///< the index to the left sub-tree (-1 if none)
-	int	RIdx;	///< the index to the right sub-tree (-1 if none)
-	int	pIdx;   ///< index of stored data-point (NOTE: only if isLeaf)
+    int LIdx;  	///< the index to the left sub-tree (-1 if none)
+  	int	RIdx;	  ///< the index to the right sub-tree (-1 if none)
+  	int	pIdx;   ///< index of stored data-point (NOTE: only if isLeaf)
 
     Node(){ LIdx=RIdx=key=pIdx=-1; }
     inline bool isLeaf() const{ return pIdx>=0; }
