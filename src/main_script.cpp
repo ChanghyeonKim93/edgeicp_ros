@@ -60,8 +60,8 @@ int main(int argc, char **argv) {
 	ros::param::get("~maxIter",						maxIter);
 
 	// Initialize subscribers.
-	message_filters::Subscriber<sensor_msgs::Image> colorImgSubs(nh , imgTopicName , 1 );
-	message_filters::Subscriber<sensor_msgs::Image> depthImgSubs(nh , depthTopicName , 1 );
+	message_filters::Subscriber<sensor_msgs::Image> colorImgSubs(nh, imgTopicName , 1 );
+	message_filters::Subscriber<sensor_msgs::Image> depthImgSubs(nh, depthTopicName , 1 );
 
 	#ifdef EXACT
 	typedef message_filters::sync_policies::ExactTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
@@ -81,20 +81,20 @@ int main(int argc, char **argv) {
 
 	// Define algorithm parameters
 	Edgeicp::Parameters params;
+
 	params.debug.imgShowFlag   = dbgFlagImshow;
 	params.debug.textShowFlag  = dbgFlagText;
-
 	//params.calib.fx 					 = 620.608832234754;
 	//params.calib.fy            = 619.113993685335;
 	//params.calib.cx            = 323.902900972212;
 	//params.calib.cy            = 212.418428046497;
-	params.calib.fx 					 = 535.4;
-	params.calib.fy            = 539.2;
-	params.calib.cx            = 320.1;
-	params.calib.cy            = 247.6;
+	params.calib.fx 					 = 535.4/2.0;
+	params.calib.fy            = 539.2/2.0;
+	params.calib.cx            = (320.1+0.5)/2.0 - 0.5;
+	params.calib.cy            = (247.6+0.5)/2.0 - 0.5;
 	params.calib.depthScale    = 1.0;
-	params.calib.width         = 640;
-	params.calib.height      	 = 480;
+	params.calib.width         = 640.0/2.0;
+	params.calib.height      	 = 480.0/2.0;
 
 	params.hyper.nSample       = nSample;  // the number of sub sampling method.
 	params.hyper.maxIter       = maxIter;   // maximum iteration number of optimization. ( 20 ~ 30 )
@@ -104,8 +104,8 @@ int main(int argc, char **argv) {
 	params.hyper.rotThres      = 3.0;
 	params.hyper.tDistNu       = 3.0;
 
-	params.canny.lowThres			 = 60;
-	params.canny.highThres		 = 140;
+	params.canny.lowThres			 = 90;
+	params.canny.highThres		 = 170;
 
 
 	Edgeicp *edgeicp = new Edgeicp(params);
@@ -169,7 +169,7 @@ int main(int argc, char **argv) {
 
  	// current gray image ( global variable ).
  	cv::cvtColor(matColorImg, curGrayImg, CV_RGB2GRAY);
-	cv::Mat curDepthTmp = cv::Mat::ones(480,640,CV_32FC1);
+	cv::Mat curDepthTmp = cv::Mat::ones(480, 640,CV_32FC1);
  	curDepthTmp = matDepth.clone();
 	curDepthTmp.convertTo(curDepth, CV_64FC1);
 

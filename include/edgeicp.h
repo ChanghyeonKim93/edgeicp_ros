@@ -36,19 +36,19 @@ public:
     double cx;    //  principal point (u-coordinate)
     double cy;    //  principal point (v-coordinate)
     double depthScale;
-    int width ;
-    int height;
+    double width ;
+    double height;
 
     Calibration () {
-      fx          = 620.608832234754;
-      fy          = 619.113993685335;
+      fx          = 535.4/2.0;
+      fy          = 539.2/2.0;
       invFx       = 1.0 / fx;
       invFy       = 1.0 / fy;
-      cx          = 323.902900972212;
-      cy          = 212.418428046497;
-      depthScale  = 1000.0;
-      width       = 640;
-      height      = 480;
+      cx          = (320.1+0.5)/2.0 - 0.5;
+      cy          = (247.6+0.5)/2.0 - 0.5;
+      depthScale  = 1.0;
+      width       = 640.0/2.0;
+      height      = 480.0/2.0;
     }
   };
 
@@ -69,7 +69,7 @@ public:
     	treeDistThres = 15.0; // pixels, not use
     	transThres    = 0.05; // 2 cm
     	rotThres      = 3.0;  // 3 degree
-      tDistNu           = 2.0;  // t-distribution DOF = 2
+      tDistNu       = 2.0;  // t-distribution DOF = 2
     }
   };
 
@@ -78,8 +78,8 @@ public:
     int highThres;
 
     Cannyparameters () {
-      lowThres      = 50;
-      highThres     = 110;
+      lowThres      = 80;
+      highThres     = 170;
     }
   };
 

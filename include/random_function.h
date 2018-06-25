@@ -8,7 +8,7 @@
 //#include <cmath>
 
 namespace rnd{
-  void randsample(const int& nPoints, const int& nSamples, std::vector<int>& refIdx);
+  void randsample(const int& nPoints, const int& nSamples, std::vector<int>& rndIdx_);
   double randn(); // not yet done.
 };
 

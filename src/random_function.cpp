@@ -1,9 +1,9 @@
 #include "random_function.h"
 
-void rnd::randsample(const int& nPoints, const int& nSample, std::vector<int>& refIdx) { //sampling without replacement
-  refIdx.reserve(0); // initialize
-  if(nPoints <= nSample)  refIdx.resize(nPoints, 0);
-  else refIdx.resize(nSample, 0);
+void rnd::randsample(const int& nPoints, const int& nSample, std::vector<int>& rndIdx_) { //sampling without replacement
+  rndIdx_.reserve(0); // initialize
+  if(nPoints <= nSample)  rndIdx_.resize(nPoints, 0);
+  else rndIdx_.resize(nSample, 0);
 
   std::vector<int> fullIdx;
   fullIdx.reserve(0);
@@ -15,10 +15,10 @@ void rnd::randsample(const int& nPoints, const int& nSample, std::vector<int>& r
   std::random_shuffle(fullIdx.begin(), fullIdx.end());
   //sampling specific number from fullIdx
   if(nPoints <= nSample) {
-    for(i = 0; i < nPoints; i++) refIdx[i] = fullIdx[i];
+    for(i = 0; i < nPoints; i++) rndIdx_[i] = fullIdx[i];
   }
   else{
-    for(i = 0; i < nSample; i++) refIdx[i] = fullIdx[i];
+    for(i = 0; i < nSample; i++) rndIdx_[i] = fullIdx[i];
   }
 };
 

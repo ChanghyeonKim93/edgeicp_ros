@@ -249,7 +249,7 @@ void Edgeicp::calc_icp_residual_div(const std::vector<PixelData*>& curPixelDataV
   // input : this->keyPixelDataVec, this->curPixelDataVec, refIdx, rndIdx
   double xr, yr, xc, yc;
   double diff_x, diff_y;
-  double grad_x, grad_y;
+  double gx, gy;
   double resX, resY, resTotal;
   int rndNum = rndIdx_.size();
   //residualVec_.reserve(0); // I assume that the "residualVec_" is given initialized ( empty )
@@ -262,14 +262,14 @@ void Edgeicp::calc_icp_residual_div(const std::vector<PixelData*>& curPixelDataV
     xr = keyPixelDataVec_[refIdx_[i]]->u;
     yr = keyPixelDataVec_[refIdx_[i]]->v;
 
-    grad_x = keyPixelDataVec_[refIdx_[i]]->gx;
-    grad_y = keyPixelDataVec_[refIdx_[i]]->gy;
+    gx = keyPixelDataVec_[refIdx_[i]]->gx;
+    gy = keyPixelDataVec_[refIdx_[i]]->gy;
 
     diff_x = xc - xr;
     diff_y = yc - yr;
 
-    resX = diff_x*grad_x;
-    resY = diff_y*grad_y;
+    resX = diff_x*gx;
+    resY = diff_y*gy;
 
     resTotal = resX + resY;
 
@@ -353,8 +353,6 @@ void Edgeicp::convert_pixeldatavec_to_vecvec2d(const std::vector<PixelData*>& pi
         tmpPixel2Vec_.push_back(tmpPixel2);
       }
 };
-
-// TODO: !!!
 
 void Edgeicp::calc_icp_Jacobian_div(const std::vector<PixelData*>& warpedCurPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, Eigen::MatrixXd& J_) {
   double fx = this->params.calib.fx;
@@ -575,19 +573,19 @@ void Edgeicp::run() {
     double errPrev   = 1e12;
     double lambda    = 0.05;
     double stepScale = 0.7;
-    double tSigma    = 3.0; // initial value. any value is okay.
+    double tSigma    = 1.0; // initial value. any value is okay.
 
     // initialize the containers exploited in the iterative optimization.
     Edgeicp::initialize_pixeldata(this->warpedCurPixelDataVec, this->curPixelDataVec.size()); // warpedCurPixelDataVec ( length : sampled & reduced number ! )
     std::vector<int> refIdx; // reference indices which are matched to the warped current pixels.
-    Eigen::MatrixXd J           = Eigen::MatrixXd::Zero(this->params.hyper.nSample, 6);
-    Eigen::MatrixXd W           = Eigen::MatrixXd::Ones(this->params.hyper.nSample, 1);
-    Eigen::MatrixXd JW          = Eigen::MatrixXd::Zero(this->params.hyper.nSample, 6);
+    Eigen::MatrixXd J           = Eigen::MatrixXd::Zero(rndIdx.size(), 6);
+    Eigen::MatrixXd W           = Eigen::MatrixXd::Ones(rndIdx.size(), 1);
+    Eigen::MatrixXd JW          = Eigen::MatrixXd::Zero(rndIdx.size(), 6);
     Eigen::MatrixXd H           = Eigen::MatrixXd::Zero(6, 6);
     Eigen::MatrixXd HAugmented  = Eigen::MatrixXd::Zero(6, 6);
     Eigen::MatrixXd diagH       = Eigen::MatrixXd::Zero(6, 6);
-    Eigen::MatrixXd residual    = Eigen::MatrixXd::Zero(this->params.hyper.nSample, 1);
-    Eigen::MatrixXd residualW   = Eigen::MatrixXd::Zero(this->params.hyper.nSample, 1);
+    Eigen::MatrixXd residual    = Eigen::MatrixXd::Zero(rndIdx.size(), 1);
+    Eigen::MatrixXd residualW   = Eigen::MatrixXd::Zero(rndIdx.size(), 1);
 
     if(this->params.debug.textShowFlag) std::cout<<"----------------------------------------------------"<<std::endl;
 
@@ -613,28 +611,19 @@ void Edgeicp::run() {
       {
         this->keyTree2->kdtree_nearest_neighbor(tmpPixel2Vec, refIdx);
       }
+
+      /*for(int i = 0; i < refIdx.size(); i++){
+        std::cout<< refIdx[i]<<std::endl;
+      }
+      */
       // TODO: residual calculation
       Edgeicp::calc_icp_residual_div(this->warpedCurPixelDataVec, this->keyPixelDataVec, rndIdx, refIdx, residual);
-
-      /*
-       * % Hessian & Jacobian
-       * J = calc_ICP_Jacobian_div(ref_pts, warp_pts, g_vec, ref_ind, xi_temp);
-       * % residual reweighting
-       * W = ones(length(residual),1);
-       * if(icp_iter >=5)
-       *     W = update_weight_matrix(residual, sig_r, nu);
-       * end
-       * JW          = bsxfun(@times, J, W);
-       * residualW   = bsxfun(@times, residual, W);
-       * Hessian     = JW.'*J;
-       * delta_xi    = -stepScale*(Hessian + lambda*diag(diag(Hessian)))^-1*JW.'*residual;
-       */
 
       // TODO: calculate Jacobian matrix ( calc_ICP_Jacobian_div )
       Edgeicp::calc_icp_Jacobian_div(warpedCurPixelDataVec, keyPixelDataVec, rndIdx, refIdx, J);
 
       // TODO: t-distribution weight matrix update ( update_t_distribution )
-      if(icpIter > 5) // t-distribution weighting after 5 iterations
+      if(icpIter >= 5) // t-distribution weighting after 5 iterations
       {
         // TODO: find t-distribution fitting the current residual. ( update_weight_matrix )
         tSigma = Edgeicp::update_t_distribution(residual, tSigma, this->params.hyper.tDistNu);
@@ -658,10 +647,10 @@ void Edgeicp::run() {
       HAugmented = H + lambda*diagH;
 
       // TODO: delta_xi calculation.
-      delXi = -stepScale * HAugmented.inverse() * JW.transpose() * residual;
+      this->delXi = -stepScale * HAugmented.inverse() * JW.transpose() * residual;
 
       // TODO: xi_temp = xi_temp + delta_xi. update ~
-      tmpXi += delXi;
+      this->tmpXi += this->delXi;
 
       // TODO: adjust lambda & stepScale
       if(icpIter > 1)
@@ -672,11 +661,11 @@ void Edgeicp::run() {
           stepScale    *= 1.2;
 
           if(stepScale >= 1)  stepScale  = 1;
-          if(lambda >= 20)    lambda     = 20;
+          if(lambda >= 30)    lambda     = 30;
         }
         if(fabs(errNow - errPrev)<=4*1e-6 || (icpIter >= 40 && fabs(errNow - errPrev)<=1e-4))
         {
-          if(icpIter >= 20) break;
+          if(icpIter >= 30) break;
         }
       }
       if(this->params.debug.textShowFlag == true)
@@ -805,7 +794,7 @@ void Edgeicp::run() {
     cv::imshow("key image", this->keyImgLow);
     cv::imshow("current edge image", this->debugImg);
     //cv::imshow("current edge image", scaledImg);
-    cv::waitKey(3);
+    cv::waitKey(5);
     this->debugImg   =  cv::Scalar(255,255,255);
   }
 }

@@ -9,8 +9,8 @@
         <param name="debug_flag_text" type="bool" value="false"/>
 
 
-        <param name="nSample" type="int" value="700"/>
-        <param name="maxIter" type="int" value="50"/>
+        <param name="nSample" type="int" value="600"/>
+        <param name="maxIter" type="int" value="100"/>
 
     </node>
 </launch>
