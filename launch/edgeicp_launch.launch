@@ -5,12 +5,17 @@
         <param name="color_topic_name" type="string" value="/camera/rgb/image_rect_color"/>
         <param name="depth_topic_name" type="string" value="/camera/depth_registered/hw_registered/image_rect_raw"/>
 
+        <param name="publish_topic_name" type="string" value="/edgeicp/pose"/>
         <param name="debug_flag_imshow" type="bool" value="true"/>
-        <param name="debug_flag_text" type="bool" value="true"/>
+        <param name="debug_flag_text" type="bool" value="false"/>
 
 
         <param name="nSample" type="int" value="500"/>
         <param name="maxIter" type="int" value="100"/>
+
+        <param name="cannyHighThres" type="double" value="155"/>
+        <param name="cannyLowThres" type="double" value="350"/>
+
 
     </node>
 </launch>

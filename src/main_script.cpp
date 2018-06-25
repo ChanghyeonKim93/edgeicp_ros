@@ -20,6 +20,9 @@
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
 
+// These headers are needed to publish pose topic.
+#include <geometry_msgs/PoseStamped.h>  // vicon_velocity/CHK_M100/CHK_M100  ( x, y, z )
+
 #define APPROXIMATE 1
 
 #ifdef EXACT
@@ -47,8 +50,10 @@ int main(int argc, char **argv) {
 	ros::NodeHandle nh("~");
 
 	std::string imgTopicName, depthTopicName;
+	std::string outputTopicName;
 	bool dbgFlagImshow, dbgFlagText;
 	int nSample, maxIter;
+	double cannyHighThres, cannyLowThres;
 
 	// Get ROS parameters from launch file.
 	ros::param::get("~color_topic_name",  imgTopicName);
@@ -58,6 +63,10 @@ int main(int argc, char **argv) {
 	ros::param::get("~debug_flag_text",   dbgFlagText);
 	ros::param::get("~nSample",					  nSample);
 	ros::param::get("~maxIter",						maxIter);
+	ros::param::get("~cannyHighThres",    cannyHighThres);
+	ros::param::get("~cannyLowThres",     cannyLowThres);
+
+	ros::param::get("~publish_topic_name", outputTopicName);
 
 	// Initialize subscribers.
 	message_filters::Subscriber<sensor_msgs::Image> colorImgSubs(nh, imgTopicName , 1 );
@@ -70,8 +79,14 @@ int main(int argc, char **argv) {
 	typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image> MySyncPolicy;
 	#endif
 
-	message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(10), colorImgSubs, depthImgSubs );
+	message_filters::Synchronizer<MySyncPolicy> sync(MySyncPolicy(5), colorImgSubs, depthImgSubs );
 	sync.registerCallback(boost::bind(&image_callback, _1, _2));
+
+	// Initialize publisher
+	ros::Publisher posePublisher;
+	geometry_msgs::PoseStamped currVoPose;
+	Eigen::MatrixXd currentMotion = Eigen::MatrixXd::Zero(6,1);
+	posePublisher = nh.advertise<geometry_msgs::PoseStamped> (outputTopicName, 1);
 
 	// =======================================================
 	// =======================================================
@@ -98,26 +113,33 @@ int main(int argc, char **argv) {
 
 	params.hyper.nSample       = nSample;  // the number of sub sampling method.
 	params.hyper.maxIter       = maxIter;   // maximum iteration number of optimization. ( 20 ~ 30 )
-	params.hyper.shiftIter     = 7;    // find correspondences by 4 dimensions until shiftIterations. After, we use 2 dimensions matcher.
-	params.hyper.treeDistThres = 5.0; // distance thresholding during kd tree searching.
-	params.hyper.transThres    = 0.05; //
+	params.hyper.shiftIter     = 6;    // find correspondences by 4 dimensions until shiftIterations. After, we use 2 dimensions matcher.
+	params.hyper.treeDistThres = 10.0; // distance thresholding during kd tree searching.
+	params.hyper.transThres    = 0.06; //
 	params.hyper.rotThres      = 3.0;
 	params.hyper.tDistNu       = 3.0;
 
-	params.canny.lowThres			 = 90;
-	params.canny.highThres		 = 170;
+	params.canny.lowThres			 = cannyLowThres;  // 70
+	params.canny.highThres		 = cannyHighThres; // 160
 
 
 	Edgeicp *edgeicp = new Edgeicp(params);
-
 	// ROS spinning.
 	while(ros::ok()) {
 		ros::spinOnce(); // VERY FAST, consumes negligibly small time !!!
 		if(imgUpdated == true) {
 			imgUpdated = false;
 
-			edgeicp->image_acquisition(curGrayImg, curDepth, imgTime);
+			edgeicp->set_images(curGrayImg, curDepth, imgTime);
 			edgeicp->run();
+			edgeicp->get_motion(currentMotion(0,0),currentMotion(1,0),currentMotion(2,0),currentMotion(3,0),currentMotion(4,0),currentMotion(5,0));
+
+			// publish the motion
+			currVoPose.pose.position.x = currentMotion(0,0);
+			currVoPose.pose.position.y = currentMotion(1,0);
+			currVoPose.pose.position.z = currentMotion(2,0);
+			currVoPose.header.stamp = ros::Time::now();
+			posePublisher.publish(currVoPose);
 		}
 	}
 
@@ -127,6 +149,17 @@ int main(int argc, char **argv) {
 	ROS_INFO_STREAM("CEASE - edgeicp ");
 	return 0;
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

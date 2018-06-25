@@ -129,12 +129,14 @@ private: // related to PixelData
   void delete_pixeldata(std::vector<PixelData*>& pixelDataVec);
   void initialize_pixeldata(const std::vector<PixelData*>& inputPixelDataVec_, std::vector<PixelData*>& outputPixelDataVec_);
 
+
+
 public: // Methods used in main_script.cpp
   Edgeicp(Parameters params_); // constructor
   ~Edgeicp();                  // desctructor.
   void run();                  // one cycle of the algorithm.
-  void image_acquisition(const cv::Mat& img, const cv::Mat& depth, const TopicTime& curTime_);
-  void print_motion(const double& x, const double& y, const double& z, const double& roll, const double& pitch, const double& yaw);
+  void set_images(const cv::Mat& img, const cv::Mat& depth, const TopicTime& curTime_);
+  void get_motion(double& x, double& y, double& z, double& roll, double& pitch, double& yaw);
 
 
 
@@ -150,20 +152,19 @@ private: // Methods used in the algorithm privately.
   void convert_pixeldatavec_to_vecvec2d(const std::vector<PixelData*>& pixelDataVec_, const std::vector<int>& indVec_, std::vector<std::vector<double>>& tmpPixel2Vec_);
   void convert_pixeldatavec_to_vecvec4d(const std::vector<PixelData*>& pixelDataVec_, const std::vector<int>& indVec_, std::vector<std::vector<double>>& tmpPixel4Vec_);
   void calc_icp_Jacobian_div(const std::vector<PixelData*>& warpedCurPixelDataVec_, const std::vector<PixelData*>& keyPixelDataVec_, const std::vector<int>& rndIdx_, const std::vector<int>& refIdx_, Eigen::MatrixXd& J_);
-  double mean_residual(const Eigen::MatrixXd& residual_);
-  double update_t_distribution(const Eigen::MatrixXd& residual_, const double& sigma_, const double& nu_);
   void update_weight_matrix(const Eigen::MatrixXd& residual_, const double& sigma_, const double& nu_, Eigen::MatrixXd& W_);
   void multiply_weight_matrix(const Eigen::MatrixXd& J_, const Eigen::MatrixXd& W_, Eigen::MatrixXd& JW_);
+  double mean_residual(const Eigen::MatrixXd& residual_);
+  double update_t_distribution(const Eigen::MatrixXd& residual_, const double& sigma_, const double& nu_);
+
 
 
 private: // Scripts
 
 
 
-
 public: // Public variables
   bool completeFlag;
-
 
 
 private: // Private variables
@@ -212,6 +213,7 @@ private: // Private variables
   std::vector<Eigen::MatrixXd> trajXi; //
   std::vector<Eigen::MatrixXd> trajTransform;
 
+  Eigen::MatrixXd currentPose;
 
 };
 #endif
